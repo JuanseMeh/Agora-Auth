@@ -39,7 +39,7 @@ impl IdentityRepositorySql {
         identifier: &str,
     ) -> Result<IdentityRow, PersistenceError> {
         const QUERY: &str = r#"
-            SELECT user_id, identifier, password_hash, failed_attempts, 
+            SELECT user_id::TEXT, identifier, password_hash, failed_attempts, 
                    locked_until, password_changed_at, created_at, updated_at
             FROM identity_credential
             WHERE identifier = $1
@@ -66,10 +66,10 @@ impl IdentityRepositorySql {
     /// Returns `PersistenceError::Mapping` if the row cannot be mapped to a domain entity.
     pub async fn find_by_id(&self, user_id: &str) -> Result<IdentityRow, PersistenceError> {
         const QUERY: &str = r#"
-            SELECT user_id, identifier, password_hash, failed_attempts,
+            SELECT user_id::TEXT, identifier, password_hash, failed_attempts,
                    locked_until, password_changed_at, created_at, updated_at
             FROM identity_credential
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
         "#;
 
         sqlx::query_as::<_, IdentityRow>(QUERY)
