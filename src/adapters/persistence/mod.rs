@@ -21,11 +21,13 @@ Database errors are mapped to domain-level errors defined in `error`.
 
 pub mod database;
 pub mod error;
+pub mod id_conversion;
 pub mod models;
 pub mod repositories;
 
 pub use database::Database;
 pub use error::PersistenceError;
+pub use id_conversion::to_uuid;
 pub use repositories::{CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql};
 
 #[cfg(test)]
