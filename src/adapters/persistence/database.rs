@@ -31,6 +31,7 @@ impl Default for PoolConfig {
 ///
 /// Handles creation, management, and lifecycle of database connections.
 /// All repository operations must use this pool.
+#[derive(Clone)]
 pub struct Database {
     pool: PgPool,
 }
