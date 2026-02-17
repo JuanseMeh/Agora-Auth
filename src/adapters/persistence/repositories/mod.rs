@@ -18,3 +18,5 @@ pub use identity_repository_sql::IdentityRepositorySql;
 pub use credential_repository_sql::CredentialRepositorySql;
 pub use session_repository_sql::SessionRepositorySql;
 
+#[cfg(test)]
+mod tests;

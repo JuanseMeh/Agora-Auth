@@ -28,3 +28,5 @@ pub use database::Database;
 pub use error::PersistenceError;
 pub use repositories::{CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql};
 
+#[cfg(test)]
+pub mod tests;

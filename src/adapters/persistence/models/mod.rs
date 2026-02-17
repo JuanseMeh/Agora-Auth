@@ -18,4 +18,5 @@ pub mod session_row;
 pub use identity_row::IdentityRow;
 pub use session_row::SessionRow;
 
-
+#[cfg(test)]
+mod tests;

@@ -33,4 +33,5 @@ pub use execution_error::ExecutionError;
 pub use mapping_error::MappingError;
 pub use persistence_error::PersistenceError;
 
-
+#[cfg(test)]
+mod tests;
