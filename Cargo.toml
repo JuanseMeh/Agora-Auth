@@ -7,6 +7,8 @@ edition = "2024"
 chrono = "0.4"
 sqlx = {version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "chrono"]}
 sha2 = "0.10"
+argon2 = "0.5.3"
+jsonwebtoken = "10.3.0"
 
 [dev-dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
