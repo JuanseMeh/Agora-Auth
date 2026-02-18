@@ -25,3 +25,6 @@ pub mod password_error;
 pub use crypto_error::CryptoError;
 pub use jwt_error::JwtError;
 pub use password_error::PasswordError;
+
+#[cfg(test)]
+mod tests;
