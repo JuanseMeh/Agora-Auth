@@ -229,6 +229,18 @@ impl From<JwtError> for TokenError {
             JwtError::InvalidToken { reason } => {
                 TokenError::malformed(reason)
             }
+            JwtError::InvalidKey { reason } => {
+                TokenError::signature_invalid(format!("invalid key: {}", reason))
+            }
+            JwtError::Expired { reason } => {
+                TokenError::expired(reason)
+            }
+            JwtError::SignatureInvalid { reason } => {
+                TokenError::signature_invalid(reason)
+            }
+            JwtError::AlgorithmMismatch { reason } => {
+                TokenError::unsupported_algorithm(reason)
+            }
         }
     }
 }
