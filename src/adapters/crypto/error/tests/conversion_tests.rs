@@ -269,4 +269,42 @@ mod tests {
         assert!(cred_err.to_string().contains("Invalid password_hash format"));
         assert!(cred_err.to_string().contains("corrupted"));
     }
+
+    // JwtError new variants → TokenError conversions
+
+    #[test]
+    fn test_jwt_error_invalid_key_to_token_error() {
+        let jwt_err = JwtError::invalid_key("bad key format");
+        let token_err: TokenError = jwt_err.into();
+        
+        assert!(token_err.to_string().contains("invalid key"));
+        assert!(token_err.to_string().contains("bad key format"));
+    }
+
+    #[test]
+    fn test_jwt_error_expired_to_token_error() {
+        let jwt_err = JwtError::expired("token expired at 123456");
+        let token_err: TokenError = jwt_err.into();
+        
+        assert!(token_err.to_string().contains("expired"));
+        assert!(token_err.to_string().contains("token expired at 123456"));
+    }
+
+    #[test]
+    fn test_jwt_error_signature_invalid_to_token_error() {
+        let jwt_err = JwtError::signature_invalid("signature mismatch");
+        let token_err: TokenError = jwt_err.into();
+        
+        assert!(token_err.to_string().contains("signature verification failed"));
+        assert!(token_err.to_string().contains("signature mismatch"));
+    }
+
+    #[test]
+    fn test_jwt_error_algorithm_mismatch_to_token_error() {
+        let jwt_err = JwtError::algorithm_mismatch("expected HS256, got RS256");
+        let token_err: TokenError = jwt_err.into();
+        
+        assert!(token_err.to_string().contains("algorithm not supported"));
+        assert!(token_err.to_string().contains("expected HS256, got RS256"));
+    }
 }
