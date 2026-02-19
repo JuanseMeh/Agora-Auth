@@ -1,5 +1,5 @@
 /// Token-safe, data-only representation of an identity.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub struct IdentityClaims {
     /// Optional user identifier suitable for embedding in claims
     pub user_id: Option<String>,
@@ -13,4 +13,3 @@ impl IdentityClaims {
         self.user_id.is_none() && self.workspace_id.is_none()
     }
 }
-
