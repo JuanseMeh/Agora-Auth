@@ -10,7 +10,11 @@ chrono = "0.4"
 sqlx = {version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "chrono"]}
 sha2 = "0.10"
 argon2 = "0.5.3"
-jsonwebtoken = "10.3.0"
+jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
+ring = "0.17.14"
+rand = "0.10.0"
+base64 = "0.22.1"
+
 
 [dev-dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
