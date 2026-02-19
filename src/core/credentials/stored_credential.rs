@@ -41,4 +41,18 @@ impl StoredCredential {
 	pub fn repr_len(&self) -> usize {
 		self.repr.len()
 	}
+
+	/// Returns the stored hash representation as a string slice.
+    ///
+    /// This method is intended for use by password hashing adapters that need
+    /// to access the hash string for verification purposes. The hash is already
+    /// in its encoded form (e.g., PHC format) and does not expose the raw password.
+    ///
+    /// # Security Note
+    ///
+    /// The returned string is the hashed/encoded credential, not a plaintext secret.
+    /// It is safe to use for cryptographic verification operations.
+    pub fn as_hash_str(&self) -> &str {
+        &self.repr
+    }
 }
