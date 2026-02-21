@@ -29,6 +29,10 @@ pub enum InvariantError {
     UnreachableCode {
         location: String,
     },
+    /// An invariant was violated (generic)
+    Violated {
+        description: String,
+    },
 }
 
 impl InvariantError {
@@ -74,6 +78,13 @@ impl InvariantError {
             location: location.into(),
         }
     }
+
+    /// Create a Violated error
+    pub fn violated(description: impl Into<String>) -> Self {
+        Self::Violated {
+            description: description.into(),
+        }
+    }
 }
 
 impl std::fmt::Display for InvariantError {
@@ -101,6 +112,9 @@ impl std::fmt::Display for InvariantError {
             }
             Self::UnreachableCode { location } => {
                 write!(f, "Unreachable code was executed at: {}", location)
+            }
+            Self::Violated { description } => {
+                write!(f, "Invariant violated: {}", description)
             }
         }
     }

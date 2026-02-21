@@ -68,6 +68,11 @@ impl AuthenticationError {
         }
     }
 
+    /// Returns true if this error is an AccountLocked variant
+    pub fn is_account_locked(&self) -> bool {
+        matches!(self, Self::AccountLocked { .. })
+    }
+
     /// Create an ExternalProviderRejected error
     pub fn external_provider_rejected(
         provider: impl Into<String>,
@@ -106,4 +111,3 @@ impl std::fmt::Display for AuthenticationError {
         }
     }
 }
-
