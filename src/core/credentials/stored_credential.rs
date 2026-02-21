@@ -5,8 +5,11 @@
  This type therefore intentionally keeps its inner data private and does not
  provide comparison or direct accessors that would expose the secret/hash.
 */
+#[derive(Clone)]
  pub struct StoredCredential {
 	repr: String,
+	pub failed_attempts: u32,
+	pub locked_until: Option<String>,
 }
 
 impl StoredCredential {
@@ -15,7 +18,26 @@ impl StoredCredential {
 	/// Adapters (persistence layer) are expected to construct this value from
 	/// whatever storage stores; core will treat it as an opaque token.
 	pub fn from_hash(hash: impl Into<String>) -> Self {
-		Self { repr: hash.into() }
+		Self { 
+			repr: hash.into(),
+			failed_attempts: 0,
+			locked_until: None,
+		}
+	}
+
+	/// Create a `StoredCredential` with all fields populated.
+	///
+	/// Used by adapters when loading from persistence.
+	pub fn from_parts(
+		hash: impl Into<String>,
+		failed_attempts: u32,
+		locked_until: Option<String>,
+	) -> Self {
+		Self {
+			repr: hash.into(),
+			failed_attempts,
+			locked_until,
+		}
 	}
 }
 
