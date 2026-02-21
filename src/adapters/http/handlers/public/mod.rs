@@ -8,3 +8,6 @@ pub use auth::authenticate;
 pub use logout::logout;
 pub use tokens::refresh_token;
 pub use token_validation::validate_token;
+
+#[cfg(test)]
+pub mod tests;
