@@ -24,3 +24,6 @@ pub mod service_auth;
 
 pub use auth::bearer_auth;
 pub use service_auth::service_auth;
+
+#[cfg(test)]
+pub mod tests;
