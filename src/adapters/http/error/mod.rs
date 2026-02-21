@@ -25,3 +25,6 @@ pub use http_error::{
     HttpError, ValidationError, UnauthorizedError, ConflictError, NotFoundError, LockedError, InternalError,
 };
 pub use error_response::ErrorResponse;
+
+#[cfg(test)]
+mod tests;
