@@ -53,3 +53,6 @@ pub use error::{
 };
 pub use state::AppState;
 pub use router::create_router;
+
+#[cfg(test)]
+pub mod tests;
