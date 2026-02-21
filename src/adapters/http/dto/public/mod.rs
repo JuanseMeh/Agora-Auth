@@ -8,3 +8,6 @@ pub use authenticate::{AuthenticateRequest, AuthenticateResponse};
 pub use logout::{LogoutRequest, LogoutResponse};
 pub use refresh_token::{RefreshTokenRequest, RefreshTokenResponse};
 pub use token_validation::{TokenValidationRequest, TokenValidationResponse};
+
+#[cfg(test)]
+pub mod tests;
