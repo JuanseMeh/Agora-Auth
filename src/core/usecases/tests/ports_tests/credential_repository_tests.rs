@@ -12,6 +12,9 @@ impl CredentialRepository for MockCredentialRepo {
     fn update_failed_attempts(&self, _user_id: &str, _attempts: u32) {}
     fn lock_until(&self, _user_id: &str, _until: &str) {}
     fn update_password(&self, _user_id: &str, _new_credential: StoredCredential) {}
+    fn initialize_credential_state(&self, _user_id: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[test]

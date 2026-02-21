@@ -13,6 +13,17 @@ impl IdentityRepository for MockIdentityRepo {
         if id == "user123" { Some(UserIdentity::new(id)) } else { None }
     }
     fn find_workspace_by_id(&self, _id: &str) -> Option<crate::core::identity::WorkspaceIdentity> { None }
+    fn create(
+        &self,
+        _user_id: &uuid::Uuid,
+        _identifier: &str,
+        _password_hash: &str,
+        _salt: &str,
+        _algorithm: &str,
+        _iterations: u32,
+    ) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[test]
