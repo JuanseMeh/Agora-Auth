@@ -17,4 +17,26 @@ pub trait IdentityRepository {
 
 	/// Find a workspace identity by its unique id.
 	fn find_workspace_by_id(&self, id: &str) -> Option<WorkspaceIdentity>;
+
+	/// Create a new identity with the given credentials.
+	///
+	/// # Arguments
+	/// * `user_id` - Unique user identifier
+	/// * `identifier` - User's unique identifier (username/email)
+	/// * `password_hash` - Hashed password
+	/// * `salt` - Password salt
+	/// * `algorithm` - Hashing algorithm used
+	/// * `iterations` - Number of hashing iterations
+	///
+	/// # Errors
+	/// Returns an error if the identifier already exists or persistence fails.
+	fn create(
+		&self,
+		user_id: &uuid::Uuid,
+		identifier: &str,
+		password_hash: &str,
+		salt: &str,
+		algorithm: &str,
+		iterations: u32,
+	) -> Result<(), String>;
 }

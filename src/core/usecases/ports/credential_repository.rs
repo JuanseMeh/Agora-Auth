@@ -19,4 +19,15 @@ pub trait CredentialRepository {
 
 	/// Update the user's password to a new stored credential.
 	fn update_password(&self, user_id: &str, new_credential: StoredCredential);
+
+	/// Initialize credential state for a new user.
+	///
+	/// Sets failed_attempts to 0 and no lock.
+	///
+	/// # Arguments
+	/// * `user_id` - The user ID to initialize
+	///
+	/// # Errors
+	/// Returns an error if the operation fails.
+	fn initialize_credential_state(&self, user_id: &str) -> Result<(), String>;
 }
