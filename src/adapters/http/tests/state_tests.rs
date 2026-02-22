@@ -1,6 +1,7 @@
 //! Tests for AppState
 
 use std::sync::Arc;
+use futures::future::BoxFuture;
 use crate::adapters::http::state::AppState;
 use crate::core::usecases::ports::{
     IdentityRepository, CredentialRepository, SessionRepository, TokenService, PasswordHasher, ServiceRegistry,
@@ -21,16 +22,16 @@ struct MockPasswordHasher;
 struct MockServiceRegistry;
 
 impl IdentityRepository for MockIdentityRepo {
-    fn find_by_identifier(&self, _identifier: &str) -> Option<UserIdentity> {
-        None
+    fn find_by_identifier(&self, _identifier: &str) -> BoxFuture<'_, Option<UserIdentity>> {
+        Box::pin(async move { None })
     }
     
-    fn find_by_id(&self, _id: &str) -> Option<UserIdentity> {
-        None
+    fn find_by_id(&self, _id: &str) -> BoxFuture<'_, Option<UserIdentity>> {
+        Box::pin(async move { None })
     }
     
-    fn find_workspace_by_id(&self, _id: &str) -> Option<crate::core::identity::WorkspaceIdentity> {
-        None
+    fn find_workspace_by_id(&self, _id: &str) -> BoxFuture<'_, Option<crate::core::identity::WorkspaceIdentity>> {
+        Box::pin(async move { None })
     }
     
     fn create(
@@ -41,39 +42,53 @@ impl IdentityRepository for MockIdentityRepo {
         _salt: &str,
         _algorithm: &str,
         _iterations: u32,
-    ) -> Result<(), String> {
-        Ok(())
+    ) -> BoxFuture<'_, Result<(), String>> {
+        Box::pin(async move { Ok(()) })
     }
 }
 
 impl CredentialRepository for MockCredentialRepo {
-    fn get_by_user_id(&self, _user_id: &str) -> Option<StoredCredential> {
-        None
+    fn get_by_user_id(&self, _user_id: &str) -> BoxFuture<'_, Option<StoredCredential>> {
+        Box::pin(async move { None })
     }
     
-    fn update_failed_attempts(&self, _user_id: &str, _attempts: u32) {}
+    fn update_failed_attempts(&self, _user_id: &str, _attempts: u32) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
     
-    fn lock_until(&self, _user_id: &str, _until: &str) {}
+    fn lock_until(&self, _user_id: &str, _until: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
     
-    fn update_password(&self, _user_id: &str, _new_credential: StoredCredential) {}
+    fn update_password(&self, _user_id: &str, _new_credential: StoredCredential) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
     
-    fn initialize_credential_state(&self, _user_id: &str) -> Result<(), String> {
-        Ok(())
+    fn initialize_credential_state(&self, _user_id: &str) -> BoxFuture<'_, Result<(), String>> {
+        Box::pin(async move { Ok(()) })
     }
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) {}
-    
-    fn find_by_refresh_token_hash(&self, _hash: &str) -> Option<crate::core::usecases::ports::session_repository::Session> {
-        None
+    fn create_session(&self, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
     }
     
-    fn revoke_session(&self, _session_id: &str) {}
+    fn find_by_refresh_token_hash(&self, _hash: &str) -> BoxFuture<'_, Option<crate::core::usecases::ports::session_repository::Session>> {
+        Box::pin(async move { None })
+    }
     
-    fn revoke_all_for_user(&self, _user_id: &str) {}
+    fn revoke_session(&self, _session_id: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
     
-    fn delete_expired(&self) {}
+    fn revoke_all_for_user(&self, _user_id: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+    
+    fn delete_expired(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
 }
 
 impl TokenService for MockTokenService {
