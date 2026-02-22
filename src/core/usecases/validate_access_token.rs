@@ -27,17 +27,17 @@ pub struct ValidateAccessTokenOutput {
 
 /// Use case for validating an access token.
 pub struct ValidateAccessToken<'a> {
-    token_service: &'a dyn TokenService,
+    token_service: &'a (dyn TokenService + Send + Sync),
 }
 
 impl<'a> ValidateAccessToken<'a> {
     /// Create a new ValidateAccessToken use case with dependencies.
-    pub fn new(token_service: &'a dyn TokenService) -> Self {
+    pub fn new(token_service: &'a (dyn TokenService + Send + Sync)) -> Self {
         Self { token_service }
     }
 
     /// Execute the access token validation use case.
-    pub fn execute(&self, input: ValidateAccessTokenInput) -> Result<ValidateAccessTokenOutput, CoreError> {
+    pub async fn execute(&self, input: ValidateAccessTokenInput) -> Result<ValidateAccessTokenOutput, CoreError> {
         // Step 1: Validate token signature via TokenService
         let claims = match self.token_service.validate_access_token(&input.access_token) {
             Ok(claims) => claims,

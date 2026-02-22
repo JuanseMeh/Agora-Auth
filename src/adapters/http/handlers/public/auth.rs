@@ -43,7 +43,7 @@ pub async fn authenticate(
         password: request.password,
     };
 
-    let auth_result = auth_use_case.execute(auth_input);
+    let auth_result = auth_use_case.execute(auth_input).await;
 
     let user = match auth_result {
         Ok(output) => output.user,
@@ -73,7 +73,7 @@ pub async fn authenticate(
         user_agent: "unknown".to_string(),  // TODO: Extract from request
     };
 
-    let session_output = session_use_case.execute(session_input)
+    let session_output = session_use_case.execute(session_input).await
         .map_err(|e| HttpError::Internal(InternalError::new(format!("failed to issue session: {}", e))))?;
 
     // Step 3: Return response

@@ -27,7 +27,7 @@ pub async fn create_credential(
         .map_err(|msg| HttpError::Validation(ValidationError::new(msg)))?;
 
     // Step 1: Check if identifier already exists
-    if state.identity_repo.find_by_identifier(&request.identifier).is_some() {
+    if state.identity_repo.find_by_identifier(&request.identifier).await.is_some() {
         return Err(HttpError::Conflict(ConflictError::new("identifier already exists")));
     }
 
@@ -45,10 +45,10 @@ pub async fn create_credential(
         "", // salt is embedded in the hash string (PHC format)
         "", // algorithm is embedded in the hash string
         0,  // iterations is embedded in the hash string
-    ).map_err(|e| HttpError::Internal(InternalError::new(format!("Failed to create identity: {}", e))))?;
+    ).await.map_err(|e| HttpError::Internal(InternalError::new(format!("Failed to create identity: {}", e))))?;
 
     // Step 4: Initialize credential state (failed attempts = 0, no lock)
-    state.credential_repo.initialize_credential_state(&user_id.to_string())
+    state.credential_repo.initialize_credential_state(&user_id.to_string()).await
         .map_err(|e| HttpError::Internal(InternalError::new(format!("Failed to initialize credential state: {}", e))))?;
 
     // Step 5: Return success response

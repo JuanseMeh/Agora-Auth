@@ -32,8 +32,8 @@ pub struct IssueSessionOutput {
 
 /// Use case for issuing a new session with tokens.
 pub struct IssueSession<'a> {
-    session_repo: &'a dyn SessionRepository,
-    token_service: &'a dyn TokenService,
+    session_repo: &'a (dyn SessionRepository + Send + Sync),
+    token_service: &'a (dyn TokenService + Send + Sync),
     access_token_ttl_seconds: u64,
     refresh_token_ttl_days: u64,
 }
@@ -41,8 +41,8 @@ pub struct IssueSession<'a> {
 impl<'a> IssueSession<'a> {
     /// Create a new IssueSession use case with dependencies.
     pub fn new(
-        session_repo: &'a dyn SessionRepository,
-        token_service: &'a dyn TokenService,
+        session_repo: &'a (dyn SessionRepository + Send + Sync),
+        token_service: &'a (dyn TokenService + Send + Sync),
         access_token_ttl_seconds: u64,
         refresh_token_ttl_days: u64,
     ) -> Self {
@@ -55,7 +55,7 @@ impl<'a> IssueSession<'a> {
     }
 
     /// Execute the session issuance use case.
-    pub fn execute(&self, input: IssueSessionInput) -> Result<IssueSessionOutput, CoreError> {
+    pub async fn execute(&self, input: IssueSessionInput) -> Result<IssueSessionOutput, CoreError> {
         // Step 1: Issue access token
         let access_token = self
             .token_service
@@ -78,7 +78,7 @@ impl<'a> IssueSession<'a> {
             &input.user,
             &refresh_token_hash,
             &self.build_session_metadata(&input),
-        );
+        ).await;
 
         // Step 6: Generate session ID (UUID v7)
         let session_id = uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)).to_string();

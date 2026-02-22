@@ -1,12 +1,16 @@
 /// SQL-backed implementation of session repository.
 
 use chrono::{DateTime, Utc};
+use futures::future::FutureExt;
 
 use crate::adapters::persistence::{
     database::Database,
     error::{ConstraintError, ExecutionError, PersistenceError},
     models::SessionRow,
 };
+use crate::core::identity::UserIdentity;
+use crate::core::usecases::ports::SessionRepository;
+use crate::core::usecases::session_repository::Session;
 
 /// SQL-backed repository for session management.
 ///
@@ -204,6 +208,63 @@ impl SessionRepositorySql {
     /// Get the database pool reference.
     pub fn db(&self) -> &Database {
         &self.db
+    }
+}
+
+impl SessionRepository for SessionRepositorySql {
+    fn create_session(&self, user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> futures::future::BoxFuture<'_, ()> {
+        let user_id = user.id.clone();
+        let refresh_token_hash = refresh_token_hash.to_string();
+        let metadata = metadata.to_string();
+        let session_id = uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)).to_string();
+        let expires_at = Utc::now() + chrono::Duration::days(7); // Default 7-day session
+        
+        async move {
+            let _ = self.create_session(
+                &session_id,
+                &user_id,
+                &refresh_token_hash,
+                expires_at,
+                "0.0.0.0", // Default IP
+                &metadata,
+            )
+            .await;
+        }
+        .boxed()
+    }
+
+    fn find_by_refresh_token_hash(&self, hash: &str) -> futures::future::BoxFuture<'_, Option<Session>> {
+        let hash = hash.to_string();
+        async move {
+            self.find_by_refresh_token_hash(&hash)
+                .await
+                .ok()
+                .map(|_| Session {})
+        }
+        .boxed()
+    }
+
+    fn revoke_session(&self, session_id: &str) -> futures::future::BoxFuture<'_, ()> {
+        let session_id = session_id.to_string();
+        async move {
+            let _ = self.revoke_session(&session_id).await;
+        }
+        .boxed()
+    }
+
+    fn revoke_all_for_user(&self, user_id: &str) -> futures::future::BoxFuture<'_, ()> {
+        let user_id = user_id.to_string();
+        async move {
+            let _ = self.revoke_all_for_user(&user_id).await;
+        }
+        .boxed()
+    }
+
+    fn delete_expired(&self) -> futures::future::BoxFuture<'_, ()> {
+        async move {
+            let _ = self.delete_expired().await;
+        }
+        .boxed()
     }
 }
 

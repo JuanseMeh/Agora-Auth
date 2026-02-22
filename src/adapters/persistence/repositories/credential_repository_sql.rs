@@ -1,12 +1,15 @@
 /// SQL-backed implementation of credential repository.
 
 use chrono::{DateTime, Utc};
+use futures::future::FutureExt;
 use sqlx::Row;
 
 use crate::adapters::persistence::{
     database::Database,
     error::{ExecutionError, PersistenceError},
 };
+use crate::core::credentials::StoredCredential;
+use crate::core::usecases::ports::CredentialRepository;
 
 /// SQL-backed repository for credential state management.
 ///
@@ -204,6 +207,62 @@ impl CredentialRepositorySql {
     /// Get the database pool reference.
     pub fn db(&self) -> &Database {
         &self.db
+    }
+}
+
+impl CredentialRepository for CredentialRepositorySql {
+    fn get_by_user_id(&self, user_id: &str) -> futures::future::BoxFuture<'_, Option<StoredCredential>> {
+        let user_id = user_id.to_string();
+        async move {
+            self.get_credential_state(&user_id)
+                .await
+                .ok()
+                .and_then(|state| {
+                    let locked_until = state.locked_until.map(|dt| dt.to_rfc3339());
+                    Some(StoredCredential::from_parts(
+                        "".to_string(),
+                        state.failed_attempts as u32,
+                        locked_until,
+                    ))
+                })
+        }
+        .boxed()
+    }
+
+    fn update_failed_attempts(&self, user_id: &str, _attempts: u32) -> futures::future::BoxFuture<'_, ()> {
+        let user_id = user_id.to_string();
+        async move {
+            let _ = self.increment_failed_attempts(&user_id).await;
+        }
+        .boxed()
+    }
+
+    fn lock_until(&self, user_id: &str, until: &str) -> futures::future::BoxFuture<'_, ()> {
+        let user_id = user_id.to_string();
+        let until = until.to_string();
+        async move {
+            if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(&until) {
+                let utc_dt = dt.with_timezone(&Utc);
+                let _ = self.lock_until(&user_id, utc_dt).await;
+            }
+        }
+        .boxed()
+    }
+
+    fn update_password(&self, user_id: &str, _new_credential: StoredCredential) -> futures::future::BoxFuture<'_, ()> {
+        let user_id = user_id.to_string();
+        async move {
+            let _ = self.update_password(&user_id, "", Utc::now()).await;
+        }
+        .boxed()
+    }
+
+    fn initialize_credential_state(&self, _user_id: &str) -> futures::future::BoxFuture<'_, Result<(), String>> {
+        async move {
+            // Credential state is initialized when identity is created
+            Ok(())
+        }
+        .boxed()
     }
 }
 

@@ -4,25 +4,26 @@
 //!
 //! Adapters must implement this trait to provide persistence or external session management.
 
+use futures::future::BoxFuture;
 use crate::core::identity::UserIdentity;
 
 /// Opaque session type for use case contracts (to be defined in usecases).
 pub struct Session {/* fields omitted for now */}
 
 /// Contract for session repository access.
-pub trait SessionRepository {
+pub trait SessionRepository: Send + Sync {
 	/// Create a new session for a user.
-	fn create_session(&self, user: &UserIdentity, refresh_token_hash: &str, metadata: &str);
+	fn create_session(&self, user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> BoxFuture<'_, ()>;
 
 	/// Find a session by refresh token hash.
-	fn find_by_refresh_token_hash(&self, hash: &str) -> Option<Session>;
+	fn find_by_refresh_token_hash(&self, hash: &str) -> BoxFuture<'_, Option<Session>>;
 
 	/// Revoke a session by id or token hash.
-	fn revoke_session(&self, session_id: &str);
+	fn revoke_session(&self, session_id: &str) -> BoxFuture<'_, ()>;
 
 	/// Revoke all sessions for a user.
-	fn revoke_all_for_user(&self, user_id: &str);
+	fn revoke_all_for_user(&self, user_id: &str) -> BoxFuture<'_, ()>;
 
 	/// Delete all expired sessions.
-	fn delete_expired(&self);
+	fn delete_expired(&self) -> BoxFuture<'_, ()>;
 }

@@ -22,33 +22,54 @@ use crate::core::usecases::ports::ServiceRegistry;
 pub async fn service_auth(
     request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Response {
     // Check for service API key header
-    let api_key = request
+    let api_key = match request
         .headers()
         .get("X-Service-Key")
         .and_then(|header| header.to_str().ok())
-        .ok_or(StatusCode::UNAUTHORIZED)?;
-
-    // Validate key is not empty
-    if api_key.is_empty() {
-        return Err(StatusCode::UNAUTHORIZED);
-    }
+    {
+        Some(key) if !key.is_empty() => key,
+        _ => {
+            return Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .body(axum::body::Body::empty())
+                .unwrap();
+        }
+    };
 
     // Extract service registry from request extensions
-    let registry = request
+    let registry = match request
         .extensions()
         .get::<Arc<dyn ServiceRegistry + Send + Sync>>()
-        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    {
+        Some(reg) => reg,
+        None => {
+            return Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(axum::body::Body::empty())
+                .unwrap();
+        }
+    };
 
     // Validate API key against service registry
-    let service_name = registry.validate_api_key(api_key)
-        .ok_or(StatusCode::UNAUTHORIZED)?;
+    let service_name = match registry.validate_api_key(api_key) {
+        Some(name) => name,
+        None => {
+            return Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .body(axum::body::Body::empty())
+                .unwrap();
+        }
+    };
 
     // Check if service is active
     if !registry.is_service_active(&service_name) {
-        return Err(StatusCode::UNAUTHORIZED);
+        return Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body(axum::body::Body::empty())
+            .unwrap();
     }
 
-    Ok(next.run(request).await)
+    next.run(request).await
 }

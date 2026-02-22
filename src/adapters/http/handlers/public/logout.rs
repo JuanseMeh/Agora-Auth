@@ -36,7 +36,7 @@ pub async fn logout(
         refresh_token_hash: request.refresh_token,
     };
 
-    let output = use_case.execute(input)
+    let output = use_case.execute(input).await
         .map_err(|e| match e {
             CoreError::Authentication(_) => {
                 HttpError::Unauthorized(UnauthorizedError::new("session not found"))

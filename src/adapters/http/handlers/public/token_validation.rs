@@ -37,7 +37,7 @@ pub async fn validate_token(
         access_token,
     };
 
-    let output = use_case.execute(input)
+    let output = use_case.execute(input).await
         .map_err(|e| HttpError::Internal(InternalError::new(format!("token validation failed: {}", e))))?;
 
     // Check if token is valid

@@ -5,6 +5,7 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::FromRow;
+use crate::core::identity::UserIdentity;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct IdentityRow {
@@ -50,5 +51,10 @@ impl IdentityRow {
                 None
             }
         })
+    }
+
+    /// Convert to domain entity (UserIdentity)
+    pub fn to_domain(&self) -> UserIdentity {
+        UserIdentity::new(&self.user_id)
     }
 }

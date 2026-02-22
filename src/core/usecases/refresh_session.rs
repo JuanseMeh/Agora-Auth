@@ -30,8 +30,8 @@ pub struct RefreshSessionOutput {
 
 /// Use case for refreshing an access token using a refresh token.
 pub struct RefreshSession<'a> {
-    session_repo: &'a dyn SessionRepository,
-    token_service: &'a dyn TokenService,
+    session_repo: &'a (dyn SessionRepository + Send + Sync),
+    token_service: &'a (dyn TokenService + Send + Sync),
     access_token_ttl_seconds: u64,
     rotate_refresh_tokens: bool,
 }
@@ -39,8 +39,8 @@ pub struct RefreshSession<'a> {
 impl<'a> RefreshSession<'a> {
     /// Create a new RefreshSession use case with dependencies.
     pub fn new(
-        session_repo: &'a dyn SessionRepository,
-        token_service: &'a dyn TokenService,
+        session_repo: &'a (dyn SessionRepository + Send + Sync),
+        token_service: &'a (dyn TokenService + Send + Sync),
         access_token_ttl_seconds: u64,
         rotate_refresh_tokens: bool,
     ) -> Self {
@@ -53,7 +53,7 @@ impl<'a> RefreshSession<'a> {
     }
 
     /// Execute the session refresh use case.
-    pub fn execute(&self, input: RefreshSessionInput) -> Result<RefreshSessionOutput, CoreError> {
+    pub async fn execute(&self, input: RefreshSessionInput) -> Result<RefreshSessionOutput, CoreError> {
         // Step 1: Validate refresh token signature
         let claims = self
             .token_service
@@ -71,6 +71,7 @@ impl<'a> RefreshSession<'a> {
         let _session = self
             .session_repo
             .find_by_refresh_token_hash(&refresh_token_hash)
+            .await
             .ok_or_else(|| AuthenticationError::user_not_found("session not found"))?;
 
         // Step 5: Check session is not revoked and not expired

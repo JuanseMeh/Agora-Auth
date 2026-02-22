@@ -4,19 +4,20 @@
 //!
 //! Adapters must implement this trait to provide persistence or external identity resolution.
 
+use futures::future::BoxFuture;
 use crate::core::identity::UserIdentity;
 use crate::core::identity::WorkspaceIdentity;
 
 /// Contract for identity repository access.
-pub trait IdentityRepository {
+pub trait IdentityRepository: Send + Sync {
 	/// Find a user identity by a unique identifier (e.g., username, email).
-	fn find_by_identifier(&self, identifier: &str) -> Option<UserIdentity>;
+	fn find_by_identifier(&self, identifier: &str) -> BoxFuture<'_, Option<UserIdentity>>;
 
 	/// Find a user identity by its unique id.
-	fn find_by_id(&self, id: &str) -> Option<UserIdentity>;
+	fn find_by_id(&self, id: &str) -> BoxFuture<'_, Option<UserIdentity>>;
 
 	/// Find a workspace identity by its unique id.
-	fn find_workspace_by_id(&self, id: &str) -> Option<WorkspaceIdentity>;
+	fn find_workspace_by_id(&self, id: &str) -> BoxFuture<'_, Option<WorkspaceIdentity>>;
 
 	/// Create a new identity with the given credentials.
 	///
@@ -38,5 +39,5 @@ pub trait IdentityRepository {
 		salt: &str,
 		algorithm: &str,
 		iterations: u32,
-	) -> Result<(), String>;
+	) -> BoxFuture<'_, Result<(), String>>;
 }

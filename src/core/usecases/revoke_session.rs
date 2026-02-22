@@ -25,17 +25,17 @@ pub struct RevokeSessionOutput {
 
 /// Use case for revoking a session (logout).
 pub struct RevokeSession<'a> {
-    session_repo: &'a dyn SessionRepository,
+    session_repo: &'a (dyn SessionRepository + Send + Sync),
 }
 
 impl<'a> RevokeSession<'a> {
     /// Create a new RevokeSession use case with dependencies.
-    pub fn new(session_repo: &'a dyn SessionRepository) -> Self {
+    pub fn new(session_repo: &'a (dyn SessionRepository + Send + Sync)) -> Self {
         Self { session_repo }
     }
 
     /// Execute the session revocation use case.
-    pub fn execute(&self, input: RevokeSessionInput) -> Result<RevokeSessionOutput, CoreError> {
+    pub async fn execute(&self, input: RevokeSessionInput) -> Result<RevokeSessionOutput, CoreError> {
         // Step 1: Determine how to lookup the session
         let session_id = if let Some(sid) = input.session_id {
             sid
@@ -43,6 +43,7 @@ impl<'a> RevokeSession<'a> {
             // Lookup session by refresh token hash
             self.session_repo
                 .find_by_refresh_token_hash(&hash)
+                .await
                 .ok_or_else(|| AuthenticationError::user_not_found("session not found"))?;
             // Note: In a real implementation, we'd extract the session_id from the found session
             // For now, we return an error indicating we need the session_id directly
@@ -57,7 +58,7 @@ impl<'a> RevokeSession<'a> {
 
 
         // Step 2: Revoke the session
-        self.session_repo.revoke_session(&session_id);
+        self.session_repo.revoke_session(&session_id).await;
 
         // Step 3: Return success
         Ok(RevokeSessionOutput {

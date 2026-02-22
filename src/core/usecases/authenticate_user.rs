@@ -27,9 +27,9 @@ pub struct AuthenticateUserOutput {
 
 /// Use case for authenticating a user with password.
 pub struct AuthenticateUser<'a> {
-    identity_repo: &'a dyn IdentityRepository,
-    credential_repo: &'a dyn CredentialRepository,
-    password_hasher: &'a dyn PasswordHasher,
+    identity_repo: &'a (dyn IdentityRepository + Send + Sync),
+    credential_repo: &'a (dyn CredentialRepository + Send + Sync),
+    password_hasher: &'a (dyn PasswordHasher + Send + Sync),
     max_attempts: u32,
     lockout_duration_minutes: u32,
 }
@@ -37,9 +37,9 @@ pub struct AuthenticateUser<'a> {
 impl<'a> AuthenticateUser<'a> {
     /// Create a new AuthenticateUser use case with dependencies.
     pub fn new(
-        identity_repo: &'a dyn IdentityRepository,
-        credential_repo: &'a dyn CredentialRepository,
-        password_hasher: &'a dyn PasswordHasher,
+        identity_repo: &'a (dyn IdentityRepository + Send + Sync),
+        credential_repo: &'a (dyn CredentialRepository + Send + Sync),
+        password_hasher: &'a (dyn PasswordHasher + Send + Sync),
         max_attempts: u32,
         lockout_duration_minutes: u32,
     ) -> Self {
@@ -53,17 +53,19 @@ impl<'a> AuthenticateUser<'a> {
     }
 
     /// Execute the authentication use case.
-    pub fn execute(&self, input: AuthenticateUserInput) -> Result<AuthenticateUserOutput, CoreError> {
+    pub async fn execute(&self, input: AuthenticateUserInput) -> Result<AuthenticateUserOutput, CoreError> {
         // Step 1: Find user by identifier
         let user = self
             .identity_repo
             .find_by_identifier(&input.identifier)
+            .await
             .ok_or_else(|| AuthenticationError::user_not_found("identifier not found"))?;
 
         // Step 2: Get credential state for lockout check
         let credential = self
             .credential_repo
-            .get_by_user_id(&user.id);
+            .get_by_user_id(&user.id)
+            .await;
 
         // Step 3: Check if account is locked
         if let Some(ref cred) = credential {
@@ -93,21 +95,23 @@ impl<'a> AuthenticateUser<'a> {
                 .unwrap_or(1);
 
             self.credential_repo
-                .update_failed_attempts(&user.id, new_attempts);
+                .update_failed_attempts(&user.id, new_attempts)
+                .await;
 
             // Apply lockout if threshold reached
             if new_attempts >= self.max_attempts {
                 let lockout_until = chrono::Utc::now()
                     + chrono::Duration::minutes(self.lockout_duration_minutes as i64);
                 self.credential_repo
-                    .lock_until(&user.id, &lockout_until.to_rfc3339());
+                    .lock_until(&user.id, &lockout_until.to_rfc3339())
+                    .await;
             }
 
             return Err(AuthenticationError::user_not_found("invalid credentials").into());
         }
 
         // Step 5: Reset failed attempts on successful authentication
-        self.credential_repo.update_failed_attempts(&user.id, 0);
+        self.credential_repo.update_failed_attempts(&user.id, 0).await;
 
         Ok(AuthenticateUserOutput { user })
     }

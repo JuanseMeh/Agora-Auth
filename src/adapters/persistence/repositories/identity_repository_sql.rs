@@ -1,10 +1,13 @@
 /// SQL-backed implementation of identity repository.
 
+use futures::future::FutureExt;
 use crate::adapters::persistence::{
     database::Database,
     error::{ConstraintError, ExecutionError, PersistenceError},
     models::IdentityRow,
 };
+use crate::core::identity::UserIdentity;
+use crate::core::usecases::ports::IdentityRepository;
 
 /// SQL-backed repository for user identity and credential data.
 ///
@@ -136,6 +139,51 @@ impl IdentityRepositorySql {
             })?;
 
         Ok(())
+    }
+}
+
+impl IdentityRepository for IdentityRepositorySql {
+    fn find_by_identifier(&self, identifier: &str) -> futures::future::BoxFuture<'_, Option<UserIdentity>> {
+        let identifier = identifier.to_string();
+        async move {
+            self.find_by_identifier(&identifier)
+                .await
+                .ok()
+                .map(|row| row.to_domain())
+        }
+        .boxed()
+    }
+
+    fn find_by_id(&self, id: &str) -> futures::future::BoxFuture<'_, Option<UserIdentity>> {
+        let id = id.to_string();
+        async move {
+            self.find_by_id(&id)
+                .await
+                .ok()
+                .map(|row| row.to_domain())
+        }
+        .boxed()
+    }
+
+    fn find_workspace_by_id(&self, _id: &str) -> futures::future::BoxFuture<'_, Option<crate::core::identity::WorkspaceIdentity>> {
+        async move {
+            // TODO: Implement workspace lookup
+            None
+        }
+        .boxed()
+    }
+
+    fn create(&self, user_id: &uuid::Uuid, identifier: &str, password_hash: &str, _salt: &str, _algorithm: &str, _iterations: u32) -> futures::future::BoxFuture<'_, Result<(), String>> {
+        let user_id_str = user_id.to_string();
+        let identifier = identifier.to_string();
+        let password_hash = password_hash.to_string();
+        
+        async move {
+            self.create_identity(&user_id_str, &identifier, &password_hash)
+                .await
+                .map_err(|e| e.to_string())
+        }
+        .boxed()
     }
 }
 

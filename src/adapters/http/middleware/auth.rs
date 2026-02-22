@@ -16,29 +16,36 @@ use axum::{
 pub async fn bearer_auth(
     mut request: Request,
     next: Next,
-) -> Result<Response, StatusCode> {
+) -> Response {
     // Extract token from Authorization header
     let token = {
         let auth_header = request
             .headers()
             .get(header::AUTHORIZATION)
-            .and_then(|header| header.to_str().ok())
-            .ok_or(StatusCode::UNAUTHORIZED)?;
+            .and_then(|header| header.to_str().ok());
 
-        if !auth_header.starts_with("Bearer ") {
-            return Err(StatusCode::UNAUTHORIZED);
+        match auth_header {
+            Some(header) if header.starts_with("Bearer ") => {
+                let token_str = &header[7..];
+                if token_str.is_empty() {
+                    return Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .body(axum::body::Body::empty())
+                        .unwrap();
+                }
+                token_str.to_string()
+            }
+            _ => {
+                return Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .body(axum::body::Body::empty())
+                    .unwrap();
+            }
         }
-
-        let token_str = &auth_header[7..];
-        if token_str.is_empty() {
-            return Err(StatusCode::UNAUTHORIZED);
-        }
-
-        token_str.to_string()
     };
 
     // Store token in request extensions for handlers to use
     request.extensions_mut().insert(token);
 
-    Ok(next.run(request).await)
+    next.run(request).await
 }

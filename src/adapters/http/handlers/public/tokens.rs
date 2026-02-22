@@ -43,7 +43,7 @@ pub async fn refresh_token(
         refresh_token,
     };
 
-    let output = use_case.execute(input)
+    let output = use_case.execute(input).await
         .map_err(|e| match e {
             CoreError::Authentication(_) | CoreError::Token(_) => {
                 HttpError::Unauthorized(UnauthorizedError::new("invalid or expired refresh token"))
