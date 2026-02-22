@@ -20,3 +20,6 @@ pub use wiring::{initialize_components, AppComponents};
 
 // Re-export the main run function for convenience
 pub use self::bootstrap::run;
+
+#[cfg(test)]
+pub mod tests;
