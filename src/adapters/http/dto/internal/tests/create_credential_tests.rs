@@ -5,8 +5,10 @@ use crate::adapters::http::dto::internal::create_credential::{
 #[test]
 fn test_create_credential_request_validation_success() {
     let request = CreateCredentialRequest {
+        user_id: "019c8723-9710-772e-a57f-3e02a584a6f0".to_string(),
         identifier: "user@example.com".to_string(),
         password: "SecurePassword123".to_string(),
+        credential_type: Some("password".to_string()),
     };
 
     assert!(request.validate().is_ok());
@@ -15,8 +17,10 @@ fn test_create_credential_request_validation_success() {
 #[test]
 fn test_create_credential_request_empty_identifier() {
     let request = CreateCredentialRequest {
+        user_id: "019c8723-9710-772e-a57f-3e02a584a6f0".to_string(),
         identifier: "".to_string(),
         password: "ValidPassword123".to_string(),
+        credential_type: Some("password".to_string()),
     };
 
     assert!(request.validate().is_err());
@@ -25,8 +29,10 @@ fn test_create_credential_request_empty_identifier() {
 #[test]
 fn test_create_credential_request_empty_password() {
     let request = CreateCredentialRequest {
+        user_id: "019c8723-9710-772e-a57f-3e02a584a6f0".to_string(),
         identifier: "user@example.com".to_string(),
         password: "".to_string(),
+        credential_type: Some("password".to_string()),
     };
 
     assert!(request.validate().is_err());
@@ -35,8 +41,10 @@ fn test_create_credential_request_empty_password() {
 #[test]
 fn test_create_credential_request_weak_password() {
     let request = CreateCredentialRequest {
+        user_id: "019c8723-9710-772e-a57f-3e02a584a6f0".to_string(),
         identifier: "user@example.com".to_string(),
         password: "weak".to_string(),
+        credential_type: Some("password".to_string()),
     };
 
     assert!(request.validate().is_err());
@@ -45,8 +53,22 @@ fn test_create_credential_request_weak_password() {
 #[test]
 fn test_create_credential_request_identifier_too_long() {
     let request = CreateCredentialRequest {
+        user_id: "019c8723-9710-772e-a57f-3e02a584a6f0".to_string(),
         identifier: "a".repeat(256),
         password: "ValidPassword123".to_string(),
+        credential_type: Some("password".to_string()),
+    };
+
+    assert!(request.validate().is_err());
+}
+
+#[test]
+fn test_create_credential_request_empty_user_id() {
+    let request = CreateCredentialRequest {
+        user_id: "".to_string(),
+        identifier: "user@example.com".to_string(),
+        password: "ValidPassword123".to_string(),
+        credential_type: Some("password".to_string()),
     };
 
     assert!(request.validate().is_err());
