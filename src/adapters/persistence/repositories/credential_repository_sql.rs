@@ -37,7 +37,7 @@ impl CredentialRepositorySql {
 
     /// Get credential state for a user.
     ///
-    /// Returns failed_attempts and locked_until status.
+    /// Returns failed_attempts, locked_until status, and password hash.
     ///
     /// # Errors
     ///
@@ -47,9 +47,9 @@ impl CredentialRepositorySql {
         user_id: &str,
     ) -> Result<CredentialState, PersistenceError> {
         const QUERY: &str = r#"
-            SELECT failed_attempts, locked_until, password_changed_at
+            SELECT failed_attempts, locked_until, password_changed_at, password_hash
             FROM identity_credential
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
         "#;
 
         let row = sqlx::query(QUERY)
@@ -68,6 +68,7 @@ impl CredentialRepositorySql {
             failed_attempts: row.get("failed_attempts"),
             locked_until: row.get("locked_until"),
             password_changed_at: row.get("password_changed_at"),
+            password_hash: row.get("password_hash"),
         })
     }
 
@@ -84,7 +85,7 @@ impl CredentialRepositorySql {
             UPDATE identity_credential
             SET failed_attempts = failed_attempts + 1,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
             RETURNING failed_attempts
         "#;
 
@@ -116,7 +117,7 @@ impl CredentialRepositorySql {
             SET failed_attempts = 0,
                 locked_until = NULL,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = $1
+            WHERE user_id = $1::uuid
         "#;
 
         sqlx::query(QUERY)
@@ -147,7 +148,7 @@ impl CredentialRepositorySql {
             UPDATE identity_credential
             SET locked_until = $1,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = $2
+            WHERE user_id = $2::uuid
         "#;
 
         sqlx::query(QUERY)
@@ -185,7 +186,7 @@ impl CredentialRepositorySql {
                 failed_attempts = 0,
                 locked_until = NULL,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = $3
+            WHERE user_id = $3::uuid
         "#;
 
         sqlx::query(QUERY)
@@ -220,7 +221,7 @@ impl CredentialRepository for CredentialRepositorySql {
                 .and_then(|state| {
                     let locked_until = state.locked_until.map(|dt| dt.to_rfc3339());
                     Some(StoredCredential::from_parts(
-                        "".to_string(),
+                        state.password_hash,
                         state.failed_attempts as u32,
                         locked_until,
                     ))
@@ -275,6 +276,8 @@ pub struct CredentialState {
     pub locked_until: Option<DateTime<Utc>>,
     /// Timestamp when the password was last changed
     pub password_changed_at: DateTime<Utc>,
+    /// The stored password hash
+    pub password_hash: String,
 }
 
 #[cfg(test)]
@@ -290,9 +293,11 @@ mod tests {
             failed_attempts: 3,
             locked_until: Some(now),
             password_changed_at: now,
+            password_hash: "$argon2id$v=19$m=65536,t=3,p=4$...".to_string(),
         };
 
         assert_eq!(state.failed_attempts, 3);
         assert!(state.locked_until.is_some());
+        assert!(!state.password_hash.is_empty());
     }
 }
