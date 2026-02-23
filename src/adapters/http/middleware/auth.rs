@@ -3,9 +3,10 @@
 use axum::{
     extract::Request,
     middleware::Next,
-    response::Response,
-    http::{header, StatusCode},
+    response::{IntoResponse, Response},
+    http::header,
 };
+use crate::adapters::http::error::{HttpError, UnauthorizedError};
 
 /// Extract Bearer token from Authorization header and store in request extensions
 /// 
@@ -28,18 +29,14 @@ pub async fn bearer_auth(
             Some(header) if header.starts_with("Bearer ") => {
                 let token_str = &header[7..];
                 if token_str.is_empty() {
-                    return Response::builder()
-                        .status(StatusCode::UNAUTHORIZED)
-                        .body(axum::body::Body::empty())
-                        .unwrap();
+                    let error = HttpError::Unauthorized(UnauthorizedError::new("Token is empty"));
+                    return error.into_response();
                 }
                 token_str.to_string()
             }
             _ => {
-                return Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .body(axum::body::Body::empty())
-                    .unwrap();
+                let error = HttpError::Unauthorized(UnauthorizedError::new("Missing Authorization header"));
+                return error.into_response();
             }
         }
     };

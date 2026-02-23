@@ -7,6 +7,7 @@ use axum::{
 use crate::adapters::http::{
     dto::public::{AuthenticateRequest, AuthenticateResponse},
     error::{HttpError, ValidationError, LockedError, UnauthorizedError, InternalError},
+    router::CleanJson,
     state::AppState,
 };
 use crate::core::usecases::authenticate_user::{AuthenticateUser, AuthenticateUserInput};
@@ -23,7 +24,7 @@ use crate::core::error::CoreError;
 /// - 500 Internal Server Error on server failure
 pub async fn authenticate(
     State(state): State<AppState>,
-    Json(request): Json<AuthenticateRequest>,
+    CleanJson(request): CleanJson<AuthenticateRequest>,
 ) -> Result<(StatusCode, Json<AuthenticateResponse>), HttpError> {
     // Validate request structure
     request.validate()

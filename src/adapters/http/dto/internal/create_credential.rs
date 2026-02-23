@@ -4,15 +4,23 @@ use serde::{Deserialize, Serialize};
 /// Request to create a new credential (internal service)
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CreateCredentialRequest {
+    /// User ID provided by the User Service (source of truth for user identities)
+    pub user_id: String,
     /// User identifier (username, email, etc.)
     pub identifier: String,
     /// Raw password
     pub password: String,
+    /// Credential type (e.g., "password")
+    pub credential_type: Option<String>,
 }
 
 impl CreateCredentialRequest {
     /// Validate the request
     pub fn validate(&self) -> Result<(), String> {
+        if self.user_id.is_empty() {
+            return Err("User ID cannot be empty".to_string());
+        }
+
         if self.identifier.is_empty() {
             return Err("Identifier cannot be empty".to_string());
         }

@@ -8,6 +8,7 @@ use uuid::Uuid;
 use crate::adapters::http::{
     dto::internal::{CreateCredentialRequest, CreateCredentialResponse},
     error::{HttpError, ValidationError, ConflictError, InternalError},
+    router::CleanJson,
     state::AppState,
 };
 
@@ -20,11 +21,15 @@ use crate::adapters::http::{
 /// - 500 Internal Server Error on server failure
 pub async fn create_credential(
     State(state): State<AppState>,
-    Json(request): Json<CreateCredentialRequest>,
+    CleanJson(request): CleanJson<CreateCredentialRequest>,
 ) -> Result<(StatusCode, Json<CreateCredentialResponse>), HttpError> {
     // Validate request structure
     request.validate()
         .map_err(|msg| HttpError::Validation(ValidationError::new(msg)))?;
+
+    // Parse the user_id provided by the User Service
+    let user_id = Uuid::parse_str(&request.user_id)
+        .map_err(|_| HttpError::Validation(ValidationError::new("invalid user_id format")))?;
 
     // Step 1: Check if identifier already exists
     if state.identity_repo.find_by_identifier(&request.identifier).await.is_some() {
@@ -34,8 +39,7 @@ pub async fn create_credential(
     // Step 2: Hash the password
     let hashed_credential = state.password_hasher.hash(&request.password);
 
-    // Step 3: Create the identity
-    let user_id = Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext));
+    // Step 3: Create the identity using the provided user_id
     let created_at = chrono::Utc::now();
 
     state.identity_repo.create(

@@ -7,6 +7,7 @@ use axum::{
 use crate::adapters::http::{
     dto::public::{RefreshTokenRequest, RefreshTokenResponse},
     error::{HttpError, ValidationError, UnauthorizedError, InternalError},
+    router::CleanJson,
     state::AppState,
 };
 use crate::core::usecases::refresh_session::{RefreshSession, RefreshSessionInput};
@@ -22,7 +23,7 @@ use crate::core::error::CoreError;
 /// - 500 Internal Server Error on server failure
 pub async fn refresh_token(
     State(state): State<AppState>,
-    Json(request): Json<RefreshTokenRequest>,
+    CleanJson(request): CleanJson<RefreshTokenRequest>,
 ) -> Result<(StatusCode, Json<RefreshTokenResponse>), HttpError> {
     // Validate request structure
     request.validate()

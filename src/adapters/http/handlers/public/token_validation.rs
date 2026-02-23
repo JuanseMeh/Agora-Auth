@@ -7,6 +7,7 @@ use axum::{
 use crate::adapters::http::{
     dto::public::{TokenValidationRequest, TokenValidationResponse},
     error::{HttpError, ValidationError, UnauthorizedError, InternalError},
+    router::CleanJson,
     state::AppState,
 };
 use crate::core::usecases::validate_access_token::{ValidateAccessToken, ValidateAccessTokenInput};
@@ -21,7 +22,7 @@ use crate::core::token::Token;
 /// - 500 Internal Server Error on server failure
 pub async fn validate_token(
     State(state): State<AppState>,
-    Json(request): Json<TokenValidationRequest>,
+    CleanJson(request): CleanJson<TokenValidationRequest>,
 ) -> Result<(StatusCode, Json<TokenValidationResponse>), HttpError> {
     // Validate request structure
     request.validate()

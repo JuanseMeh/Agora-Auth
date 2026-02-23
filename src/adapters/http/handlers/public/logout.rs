@@ -7,6 +7,7 @@ use axum::{
 use crate::adapters::http::{
     dto::public::{LogoutRequest, LogoutResponse},
     error::{HttpError, ValidationError, UnauthorizedError, InternalError},
+    router::CleanJson,
     state::AppState,
 };
 use crate::core::usecases::revoke_session::{RevokeSession, RevokeSessionInput};
@@ -21,7 +22,7 @@ use crate::core::error::CoreError;
 /// - 500 Internal Server Error on server failure
 pub async fn logout(
     State(state): State<AppState>,
-    Json(request): Json<LogoutRequest>,
+    CleanJson(request): CleanJson<LogoutRequest>,
 ) -> Result<(StatusCode, Json<LogoutResponse>), HttpError> {
     // Validate request structure
     request.validate()

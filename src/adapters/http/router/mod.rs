@@ -6,4 +6,4 @@ mod router;
 
 pub use internal_router::internal_routes;
 pub use public_router::public_routes;
-pub use router::create_router;
+pub use router::{create_router, CleanJson};
