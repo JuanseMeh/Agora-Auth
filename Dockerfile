@@ -46,7 +46,7 @@ COPY --chown=appuser:appuser .env /app/.env
 USER appuser
 
 # Expose the application port
-EXPOSE 8080
+EXPOSE $AUTH_SERVER_PORT
 
 # Set environment variables for production
 ENV RUST_LOG=info
