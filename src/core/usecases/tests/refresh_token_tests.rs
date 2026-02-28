@@ -47,17 +47,18 @@ impl MockSessionRepo {
     }
     
     fn hash_token(token: &str) -> String {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        use sha2::{Sha256, Digest};
         
-        let mut hasher = DefaultHasher::new();
-        token.hash(&mut hasher);
-        format!("{:x}", hasher.finish())
+        
+        let mut hasher = Sha256::new();
+        hasher.update(token.as_bytes());
+        let result = hasher.finalize();
+        result.iter().map(|b| format!("{:02x}", b)).collect()
     }
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+    fn create_session(&self, _session_id: &str, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
         // Not used in refresh tests
         Box::pin(async move {})
     }
@@ -66,6 +67,10 @@ impl SessionRepository for MockSessionRepo {
         let sessions = self.sessions.read().unwrap();
         let result = sessions.values().find(|data| data.refresh_token_hash == hash && !data.revoked).map(|_| SessionType {});
         Box::pin(async move { result })
+    }
+
+    fn find_by_id(&self, _session_id: &str) -> BoxFuture<'_, Option<SessionType>> {
+        Box::pin(async move { None })
     }
     
     fn revoke_session(&self, session_id: &str) -> BoxFuture<'_, ()> {
@@ -128,8 +133,8 @@ impl TokenService for MockTokenService {
     
     fn validate_refresh_token(&self, token: &Token) -> Result<String, ()> {
         if self.valid_tokens.read().unwrap().contains(token.value()) {
-            // Return claims with proper format including sub field
-            Ok(r#"{"sub":"user123","type":"refresh"}"#.to_string())
+            // Return claims with proper format including sub and sid fields
+            Ok(r#"{"sub":"user123","type":"refresh","sid":"session_123"}"#.to_string())
         } else {
             Err(())
         }

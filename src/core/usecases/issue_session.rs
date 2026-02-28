@@ -56,32 +56,44 @@ impl<'a> IssueSession<'a> {
 
     /// Execute the session issuance use case.
     pub async fn execute(&self, input: IssueSessionInput) -> Result<IssueSessionOutput, CoreError> {
-        // Step 1: Issue access token
+        // Step 1: Generate v7) FIRST - needed for token session ID (UUID claims
+        tracing::debug!("[ISSUE] Step 1: Generating session ID");
+        let session_id = uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)).to_string();
+        tracing::debug!("[ISSUE] Generated session_id={}", session_id);
+
+        // Step 2: Issue access token with session_id in claims
+        tracing::debug!("[ISSUE] Step 2: Issuing access token");
         let access_token = self
             .token_service
-            .issue_access_token(&input.user.id, &self.build_access_claims(&input.user));
+            .issue_access_token(&input.user.id, &self.build_access_claims(&input.user, &session_id));
 
-        // Step 2: Issue refresh token
+        // Step 3: Issue refresh token with session_id in claims
+        tracing::debug!("[ISSUE] Step 3: Issuing refresh token");
         let refresh_token = self
             .token_service
-            .issue_refresh_token(&input.user.id, &self.build_refresh_claims(&input.user));
+            .issue_refresh_token(&input.user.id, &self.build_refresh_claims(&input.user, &session_id));
+        
+        tracing::debug!("[ISSUE] Refresh token value: {}", refresh_token.value());
 
-        // Step 3: Hash refresh token for storage
+        // Step 4: Hash refresh token for storage
+        tracing::debug!("[ISSUE] Step 4: Hashing refresh token");
         let refresh_token_hash = self.hash_token(&refresh_token);
+        tracing::debug!("[ISSUE] Computed hash: {}", refresh_token_hash);
 
-        // Step 4: Calculate expiration
+        // Step 5: Calculate expiration
         let _expires_at = chrono::Utc::now()
             + chrono::Duration::days(self.refresh_token_ttl_days as i64);
 
-        // Step 5: Persist session
+        // Step 6: Persist session
+        tracing::debug!("[ISSUE] Step 6: Persisting session to database");
         self.session_repo.create_session(
+            &session_id,
             &input.user,
             &refresh_token_hash,
             &self.build_session_metadata(&input),
         ).await;
-
-        // Step 6: Generate session ID (UUID v7)
-        let session_id = uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)).to_string();
+        
+        tracing::debug!("[ISSUE] Session created successfully");
 
         Ok(IssueSessionOutput {
             access_token,
@@ -91,21 +103,23 @@ impl<'a> IssueSession<'a> {
         })
     }
 
-    fn build_access_claims(&self, user: &UserIdentity) -> String {
-        // Build minimal claims for access token
+    fn build_access_claims(&self, user: &UserIdentity, session_id: &str) -> String {
+        // Build claims for access token including session_id
         format!(
-            r#"{{"sub":"{}","type":"access","exp":{}}}"#,
+            r#"{{"sub":"{}","type":"access","exp":{},"sid":"{}"}}"#,
             user.id,
-            chrono::Utc::now().timestamp() + self.access_token_ttl_seconds as i64
+            chrono::Utc::now().timestamp() + self.access_token_ttl_seconds as i64,
+            session_id
         )
     }
 
-    fn build_refresh_claims(&self, user: &UserIdentity) -> String {
-        // Build minimal claims for refresh token
+    fn build_refresh_claims(&self, user: &UserIdentity, session_id: &str) -> String {
+        // Build claims for refresh token including session_id
         format!(
-            r#"{{"sub":"{}","type":"refresh","exp":{}}}"#,
+            r#"{{"sub":"{}","type":"refresh","exp":{},"sid":"{}"}}"#,
             user.id,
-            chrono::Utc::now().timestamp() + (self.refresh_token_ttl_days * 86400) as i64
+            chrono::Utc::now().timestamp() + (self.refresh_token_ttl_days * 86400) as i64,
+            session_id
         )
     }
 
@@ -120,13 +134,14 @@ impl<'a> IssueSession<'a> {
     }
 
     fn hash_token(&self, token: &Token) -> String {
-        // Simple hash for refresh token storage
-        // In production, use a proper hashing algorithm like SHA-256
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
+        // Use SHA-256 for deterministic hashing
+        // This is critical: DefaultHasher uses SipHash which is non-deterministic
+        // across program executions, causing session lookup to fail
+        use sha2::{Sha256, Digest};
         
-        let mut hasher = DefaultHasher::new();
-        token.value().hash(&mut hasher);
-        format!("{:x}", hasher.finish())
+        let mut hasher = Sha256::new();
+        hasher.update(token.value().as_bytes());
+        let result = hasher.finalize();
+        hex::encode(result)
     }
 }

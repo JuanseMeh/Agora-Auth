@@ -33,6 +33,7 @@ fn test_token_encoding_diagnostics() {
         expires_at: expires.to_rfc3339(),
         not_before: None,
         scopes: None,
+        token_type: Some("access".to_string()),
     };
     
     // Try to encode directly to see the error
@@ -46,7 +47,8 @@ fn test_token_encoding_diagnostics() {
 #[test]
 fn test_token_issue_and_validate_success() {
     let service = create_test_service();
-    let claims = r#"{"user_id":"user123","workspace_id":"ws456"}"#;
+    // Use new claims format with "sub" field (JWT standard) instead of "user_id"
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     
     let token = service.issue_access_token("user123", claims);
     assert!(!token.value().is_empty());
@@ -55,14 +57,15 @@ fn test_token_issue_and_validate_success() {
     assert!(result.is_ok());
     
     let validated_claims = result.unwrap();
+    // The validated claims should contain the user_id (from "sub")
     assert!(validated_claims.contains("user123"));
-    assert!(validated_claims.contains("ws456"));
 }
 
 #[test]
 fn test_token_expired_rejected() {
     let service = create_test_service();
-    let claims = r#"{"user_id":"user123"}"#;
+    // Use new claims format with "sub" field
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     
     // Issue a token
     let token = service.issue_access_token("user123", claims);
@@ -75,7 +78,8 @@ fn test_token_expired_rejected() {
 #[test]
 fn test_token_signature_tampering_rejected() {
     let service = create_test_service();
-    let claims = r#"{"user_id":"user123"}"#;
+    // Use new claims format with "sub" field
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     
     let token = service.issue_access_token("user123", claims);
     let token_value = token.value();
@@ -97,7 +101,8 @@ fn test_token_invalid_key_rejected() {
     let service1 = create_test_service();
     let service2 = create_test_service(); // Different key
     
-    let claims = r#"{"user_id":"user123"}"#;
+    // Use new claims format with "sub" field
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     let token = service1.issue_access_token("user123", claims);
     
     // Try to validate with different key
@@ -108,7 +113,8 @@ fn test_token_invalid_key_rejected() {
 #[test]
 fn test_refresh_token_issue_and_validate() {
     let service = create_test_service();
-    let claims = r#"{"user_id":"user123"}"#;
+    // Use new claims format with "sub" field for refresh token
+    let claims = r#"{"sub":"user123","type":"refresh","exp":9999999999,"sid":"session-123"}"#;
     
     let token = service.issue_refresh_token("user123", claims);
     assert!(!token.value().is_empty());
@@ -143,7 +149,8 @@ fn test_token_with_issuer_and_audience() {
         .with_issuer("test-issuer")
         .with_audience("test-audience");
     
-    let claims = r#"{"user_id":"user123"}"#;
+    // Use new claims format with "sub" field
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     let token = service.issue_access_token("user123", claims);
     
     // Token should be issued successfully
@@ -153,7 +160,8 @@ fn test_token_with_issuer_and_audience() {
 #[test]
 fn test_token_claims_roundtrip() {
     let service = create_test_service();
-    let claims = r#"{"user_id":"user123","workspace_id":"ws456"}"#;
+    // Use new claims format with "sub" field
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     
     let token = service.issue_access_token("user123", claims);
     let result = service.validate_access_token(&token);
@@ -161,15 +169,16 @@ fn test_token_claims_roundtrip() {
     assert!(result.is_ok());
     let validated = result.unwrap();
     
-    // The validated claims should be a JSON string containing the identity
-    assert!(validated.contains("user123") || validated.contains("workspace_id"));
+    // The validated claims should be a JSON string containing the user_id (from "sub")
+    assert!(validated.contains("user123"));
 }
 
 #[test]
 #[ignore = "slow test - sleeps for 1.1 seconds"]
 fn test_different_tokens_for_same_claims() {
     let service = create_test_service();
-    let claims = r#"{"user_id":"user123"}"#;
+    // Use new claims format with "sub" field
+    let claims = r#"{"sub":"user123","type":"access","exp":9999999999,"sid":"session-123"}"#;
     
     let token1 = service.issue_access_token("user123", claims);
     

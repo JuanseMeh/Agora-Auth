@@ -5,14 +5,15 @@
 
 use chrono::{DateTime, Utc};
 use sqlx::FromRow;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, FromRow)]
 pub struct SessionRow {
     /// Session identifier (primary key, UUID)
-    pub id: String,
+    pub id: Uuid,
 
     /// User identifier (indexed, foreign key to identity_credential)
-    pub user_id: String,
+    pub user_id: Uuid,
 
     /// Hash of the refresh token (indexed, unique per session)
     pub refresh_token_hash: String,

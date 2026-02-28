@@ -1,6 +1,7 @@
 /// Tests for SessionRow model.
 
 use chrono::{Duration, Utc};
+use uuid::Uuid;
 
 use crate::adapters::persistence::models::SessionRow;
 
@@ -10,8 +11,8 @@ fn session_row_is_active_when_not_revoked_and_not_expired() {
     let future = now + Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: now,
         expires_at: future,
@@ -30,8 +31,8 @@ fn session_row_not_active_when_revoked() {
     let future = now + Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: now,
         expires_at: future,
@@ -50,8 +51,8 @@ fn session_row_not_active_when_expired() {
     let past = now - Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: past,
         expires_at: past + Duration::minutes(30),
@@ -70,8 +71,8 @@ fn session_row_is_expired_when_past_expiration() {
     let past = now - Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: past - Duration::hours(2),
         expires_at: past,
@@ -90,8 +91,8 @@ fn session_row_not_expired_when_before_expiration() {
     let future = now + Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: now,
         expires_at: future,
@@ -110,8 +111,8 @@ fn session_row_is_revoked_when_revoked_at_is_set() {
     let future = now + Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: now,
         expires_at: future,
@@ -130,8 +131,8 @@ fn session_row_not_revoked_when_revoked_at_is_none() {
     let future = now + Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: now,
         expires_at: future,
@@ -150,8 +151,8 @@ fn session_row_time_to_expiration_returns_duration_when_active() {
     let future = now + Duration::hours(2);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: now,
         expires_at: future,
@@ -175,8 +176,8 @@ fn session_row_time_to_expiration_returns_none_when_expired() {
     let past = now - Duration::hours(1);
 
     let row = SessionRow {
-        id: "session1".to_string(),
-        user_id: "user1".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "hash".to_string(),
         created_at: past - Duration::hours(2),
         expires_at: past,

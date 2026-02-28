@@ -46,13 +46,21 @@ impl MockSessionRepo {
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+    fn create_session(&self, _session_id: &str, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
         Box::pin(async move {})
     }
     
     fn find_by_refresh_token_hash(&self, hash: &str) -> BoxFuture<'_, Option<SessionType>> {
         let sessions = self.sessions.read().unwrap();
         let result = sessions.values().find(|data| data.refresh_token_hash == hash && !data.revoked).map(|_| SessionType {});
+        Box::pin(async move { result })
+    }
+
+    fn find_by_id(&self, session_id: &str) -> BoxFuture<'_, Option<SessionType>> {
+        let sessions = self.sessions.read().unwrap();
+        let is_revoked = self.revoked_sessions.read().unwrap().contains(session_id);
+        // Return session only if it exists and is NOT revoked
+        let result = sessions.get(session_id).filter(|_data| !is_revoked).map(|_| SessionType {});
         Box::pin(async move { result })
     }
     
@@ -145,9 +153,17 @@ async fn test_revoke_session_already_revoked() {
         refresh_token_hash: None,
     };
     
-    // Should succeed even if already revoked (idempotent)
+    // Should fail because session is already revoked (new validation behavior)
     let result = use_case.execute(input).await;
-    assert!(result.is_ok());
+    assert!(result.is_err());
+    
+    // Verify the error is "session revoked or expired"
+    match result.unwrap_err() {
+        CoreError::Authentication(auth_err) => {
+            assert_eq!(auth_err.to_string(), "User not found: session revoked or expired");
+        }
+        _ => panic!("Expected AuthenticationError"),
+    }
 }
 
 #[tokio::test]

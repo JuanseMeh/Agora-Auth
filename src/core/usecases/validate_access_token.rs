@@ -7,10 +7,11 @@
 //! - Map failure to domain error
 //! - Optionally check password version
 //! - If password_changed_at > token.issued_at → token invalid
+//! - Validate session is active in the database
 
 use crate::core::error::CoreError;
 use crate::core::token::Token;
-use crate::core::usecases::ports::TokenService;
+use crate::core::usecases::ports::{TokenService, SessionRepository};
 
 /// Input contract for ValidateAccessToken use case.
 pub struct ValidateAccessTokenInput {
@@ -28,12 +29,16 @@ pub struct ValidateAccessTokenOutput {
 /// Use case for validating an access token.
 pub struct ValidateAccessToken<'a> {
     token_service: &'a (dyn TokenService + Send + Sync),
+    session_repository: &'a (dyn SessionRepository + Send + Sync),
 }
 
 impl<'a> ValidateAccessToken<'a> {
     /// Create a new ValidateAccessToken use case with dependencies.
-    pub fn new(token_service: &'a (dyn TokenService + Send + Sync)) -> Self {
-        Self { token_service }
+    pub fn new(
+        token_service: &'a (dyn TokenService + Send + Sync),
+        session_repository: &'a (dyn SessionRepository + Send + Sync),
+    ) -> Self {
+        Self { token_service, session_repository }
     }
 
     /// Execute the access token validation use case.
@@ -76,7 +81,29 @@ impl<'a> ValidateAccessToken<'a> {
             });
         }
 
-        // Step 5: Return successful validation
+        // Step 5: Validate session is active in the database
+        if let Some(ref sid) = session_id {
+            let session = self.session_repository.find_by_id(sid).await;
+            match session {
+                Some(_) => {
+                    // Session is active - validation successful
+                }
+                None => {
+                    return Ok(ValidateAccessTokenOutput {
+                        valid: false,
+                        user_id,
+                        session_id,
+                        reason: Some("session revoked or expired".to_string()),
+                    });
+                }
+            }
+        } else {
+            // No session_id in token - this could be a token without session
+            // For now, we'll allow this but you might want to reject it depending on requirements
+            tracing::warn!("Access token has no session_id - allowing without session validation");
+        }
+
+        // Step 6: Return successful validation
         Ok(ValidateAccessTokenOutput {
             valid: true,
             user_id,
@@ -86,11 +113,19 @@ impl<'a> ValidateAccessToken<'a> {
     }
 
     fn extract_user_id(&self, claims: &str) -> Option<String> {
+        // Try "sub" first (from JWT standard claims), fallback to "user_id" (from IdentityClaims)
         claims
             .split("\"sub\":\"")
             .nth(1)
             .and_then(|s| s.split('"').next())
             .map(|s| s.to_string())
+            .or_else(|| {
+                claims
+                    .split("\"user_id\":\"")
+                    .nth(1)
+                    .and_then(|s| s.split('"').next())
+                    .map(|s| s.to_string())
+            })
     }
 
     fn extract_session_id(&self, claims: &str) -> Option<String> {
@@ -99,6 +134,15 @@ impl<'a> ValidateAccessToken<'a> {
             .nth(1)
             .and_then(|s| s.split('"').next())
             .map(|s| s.to_string())
+    }
+
+    /// Extract exp timestamp from claims JSON
+    fn extract_exp(&self, claims: &str) -> Option<i64> {
+        claims
+            .split("\"exp\":")
+            .nth(1)
+            .and_then(|s| s.split(|c| c == ',' || c == '}').next())
+            .and_then(|s| s.trim().parse::<i64>().ok())
     }
 
     fn extract_token_type(&self, claims: &str) -> Option<String> {
@@ -111,16 +155,9 @@ impl<'a> ValidateAccessToken<'a> {
 
     fn is_expired(&self, claims: &str) -> bool {
         // Extract exp claim and compare to current time
-        if let Some(exp_part) = claims.split("\"exp\":").nth(1) {
-            // Split by either comma or closing brace to get the exp value
-            let exp_str = exp_part
-                .split(|c| c == ',' || c == '}')
-                .next()
-                .unwrap_or(exp_part);
-            if let Ok(exp) = exp_str.trim().parse::<i64>() {
-                let now = chrono::Utc::now().timestamp();
-                return now > exp;
-            }
+        if let Some(exp) = self.extract_exp(claims) {
+            let now = chrono::Utc::now().timestamp();
+            return now > exp;
         }
         true // If we can't parse, consider it expired
     }

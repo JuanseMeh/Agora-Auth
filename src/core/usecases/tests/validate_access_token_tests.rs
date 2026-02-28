@@ -1,8 +1,11 @@
 //! Comprehensive tests for ValidateAccessToken use case.
 
+use futures::future::BoxFuture;
 use super::super::validate_access_token::{ValidateAccessToken, ValidateAccessTokenInput};
 use crate::core::token::Token;
-use crate::core::usecases::ports::TokenService;
+use crate::core::usecases::ports::{TokenService, SessionRepository};
+use crate::core::usecases::ports::session_repository::Session;
+use crate::core::identity::UserIdentity;
 
 // ============================================================================
 // Mock Implementations
@@ -71,6 +74,34 @@ impl TokenService for MockTokenService {
     }
 }
 
+struct MockSessionRepo;
+impl SessionRepository for MockSessionRepo {
+    fn create_session(&self, _session_id: &str, _user: &UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+    
+    fn find_by_refresh_token_hash(&self, _hash: &str) -> BoxFuture<'_, Option<Session>> {
+        Box::pin(async move { None })
+    }
+    
+    fn find_by_id(&self, _session_id: &str) -> BoxFuture<'_, Option<Session>> {
+        // Default: always return Some(Session) to simulate active session
+        Box::pin(async move { Some(Session {}) })
+    }
+    
+    fn revoke_session(&self, _session_id: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+    
+    fn revoke_all_for_user(&self, _user_id: &str) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+    
+    fn delete_expired(&self) -> BoxFuture<'_, ()> {
+        Box::pin(async move {})
+    }
+}
+
 // ============================================================================
 // Test Cases
 // ============================================================================
@@ -78,11 +109,12 @@ impl TokenService for MockTokenService {
 #[tokio::test]
 async fn test_validate_access_token_success() {
     let token_service = MockTokenService::new();
+    let session_repo = MockSessionRepo;
     
     // Add a valid token
     token_service.add_valid_token("valid_token_123");
     
-    let use_case = ValidateAccessToken::new(&token_service);
+    let use_case = ValidateAccessToken::new(&token_service, &session_repo);
     
     let input = ValidateAccessTokenInput {
         access_token: Token::new("valid_token_123"),
@@ -100,10 +132,11 @@ async fn test_validate_access_token_success() {
 #[tokio::test]
 async fn test_validate_access_token_with_session() {
     let token_service = MockTokenService::new();
+    let session_repo = MockSessionRepo;
     
     token_service.add_valid_token("token_with_session");
     
-    let use_case = ValidateAccessToken::new(&token_service);
+    let use_case = ValidateAccessToken::new(&token_service, &session_repo);
     
     let input = ValidateAccessTokenInput {
         access_token: Token::new("token_with_session"),
@@ -121,9 +154,10 @@ async fn test_validate_access_token_with_session() {
 #[tokio::test]
 async fn test_validate_access_token_invalid_signature() {
     let token_service = MockTokenService::new();
+    let session_repo = MockSessionRepo;
     
     // Don't add the token to valid tokens - it will fail validation
-    let use_case = ValidateAccessToken::new(&token_service);
+    let use_case = ValidateAccessToken::new(&token_service, &session_repo);
     
     let input = ValidateAccessTokenInput {
         access_token: Token::new("invalid_token"),
@@ -140,11 +174,12 @@ async fn test_validate_access_token_invalid_signature() {
 #[tokio::test]
 async fn test_validate_access_token_expired() {
     let token_service = MockTokenService::new();
+    let session_repo = MockSessionRepo;
     
     // Add token as expired
     token_service.add_expired_token("expired_token_123");
     
-    let use_case = ValidateAccessToken::new(&token_service);
+    let use_case = ValidateAccessToken::new(&token_service, &session_repo);
     
     let input = ValidateAccessTokenInput {
         access_token: Token::new("expired_token_123"),
@@ -160,10 +195,11 @@ async fn test_validate_access_token_expired() {
 #[tokio::test]
 async fn test_validate_access_token_output_structure() {
     let token_service = MockTokenService::new();
+    let session_repo = MockSessionRepo;
     
     token_service.add_valid_token("test_token");
     
-    let use_case = ValidateAccessToken::new(&token_service);
+    let use_case = ValidateAccessToken::new(&token_service, &session_repo);
     
     let input = ValidateAccessTokenInput {
         access_token: Token::new("test_token"),
@@ -184,8 +220,9 @@ async fn test_validate_access_token_output_structure() {
 #[tokio::test]
 async fn test_validate_access_token_empty_token() {
     let token_service = MockTokenService::new();
+    let session_repo = MockSessionRepo;
     
-    let use_case = ValidateAccessToken::new(&token_service);
+    let use_case = ValidateAccessToken::new(&token_service, &session_repo);
     
     let input = ValidateAccessTokenInput {
         access_token: Token::new(""),

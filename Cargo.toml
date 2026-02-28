@@ -7,7 +7,7 @@ edition = "2024"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 chrono = "0.4"
-sqlx = {version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "chrono"]}
+sqlx = {version = "0.8.6", features = ["runtime-tokio-rustls", "postgres", "chrono", "uuid"]}
 sha2 = "0.10"
 argon2 = "0.5.3"
 jsonwebtoken = { version = "10.3.0", features = ["rust_crypto"] }
@@ -19,9 +19,10 @@ axum = "0.8.8"
 tower-http = { version = "0.6.8", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.0", features = ["v7", "serde"] }
+uuid = { version = "1.0", features = ["v4", "v7", "serde"] }
 anyhow = "1.0.102"
 futures = "0.3.32"
+hex = "0.4.3"
 dotenvy = "0.15"
 
 [dev-dependencies]

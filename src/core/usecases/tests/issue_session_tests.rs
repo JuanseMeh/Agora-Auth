@@ -13,14 +13,12 @@ use crate::core::usecases::ports::session_repository::Session;
 
 struct MockSessionRepo {
     sessions: std::sync::RwLock<std::collections::HashMap<String, String>>, // session_id -> refresh_token_hash
-    session_counter: std::sync::RwLock<u32>,
 }
 
 impl MockSessionRepo {
     fn new() -> Self {
         Self {
             sessions: std::sync::RwLock::new(std::collections::HashMap::new()),
-            session_counter: std::sync::RwLock::new(0),
         }
     }
     
@@ -30,11 +28,8 @@ impl MockSessionRepo {
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, user: &UserIdentity, refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
-        let counter = *self.session_counter.read().unwrap();
-        *self.session_counter.write().unwrap() += 1;
-        let session_id = format!("session_{}_{}", user.id(), counter);
-        self.sessions.write().unwrap().insert(session_id, refresh_token_hash.to_string());
+    fn create_session(&self, session_id: &str, _user: &UserIdentity, refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+        self.sessions.write().unwrap().insert(session_id.to_string(), refresh_token_hash.to_string());
         Box::pin(async move {})
     }
     
@@ -42,6 +37,10 @@ impl SessionRepository for MockSessionRepo {
         let sessions = self.sessions.read().unwrap();
         let result = sessions.values().any(|stored_hash| stored_hash == hash).then_some(Session {});
         Box::pin(async move { result })
+    }
+
+    fn find_by_id(&self, _session_id: &str) -> BoxFuture<'_, Option<Session>> {
+        Box::pin(async move { Some(Session {}) })
     }
     
     fn revoke_session(&self, session_id: &str) -> BoxFuture<'_, ()> {

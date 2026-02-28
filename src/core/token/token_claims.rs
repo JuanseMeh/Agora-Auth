@@ -49,6 +49,10 @@ pub struct TokenClaims {
     /// Authorization decisions MUST NOT be made solely from token scopes.
     /// Scopes indicate what the token claims to grant; enforcement happens elsewhere.
     pub scopes: Option<Vec<String>>,
+
+    /// Token type: "access" or "refresh"
+    /// This is used to distinguish between access and refresh tokens.
+    pub token_type: Option<String>,
 }
 
 impl TokenClaims {
@@ -64,6 +68,7 @@ impl TokenClaims {
             expires_at: expires_at.into(),
             not_before: None,
             scopes: None,
+            token_type: None,
         }
     }
 
@@ -76,6 +81,12 @@ impl TokenClaims {
     /// Set optional scopes.
     pub fn with_scopes(mut self, scopes: Vec<String>) -> Self {
         self.scopes = Some(scopes);
+        self
+    }
+
+    /// Set optional token type.
+    pub fn with_token_type(mut self, token_type: impl Into<String>) -> Self {
+        self.token_type = Some(token_type.into());
         self
     }
 
