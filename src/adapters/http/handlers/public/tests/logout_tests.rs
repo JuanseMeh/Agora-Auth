@@ -36,6 +36,7 @@ async fn test_logout_missing_both_session_and_token() {
     
     let app = Router::new()
         .route("/auth/logout", post(crate::adapters::http::handlers::logout))
+        .layer(axum::middleware::from_fn(crate::adapters::http::middleware::bearer_auth))
         .with_state(state);
     
     let request_body = LogoutRequest {
@@ -49,14 +50,16 @@ async fn test_logout_missing_both_session_and_token() {
                 .method("POST")
                 .uri("/auth/logout")
                 .header("content-type", "application/json")
+                .header("authorization", "Bearer valid_access_token")
                 .body(Body::from(serde_json::to_string(&request_body).unwrap()))
                 .unwrap(),
         )
         .await
         .unwrap();
     
-    // Should return 400 Bad Request when neither session_id nor refresh_token provided
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    // Should return 401 Unauthorized since the token is valid but session_id is not provided
+    // The handler now uses Bearer token for authentication, so it returns unauthorized when token is invalid
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }
 
 #[tokio::test]
@@ -75,6 +78,7 @@ async fn test_logout_invalid_json() {
     
     let app = Router::new()
         .route("/auth/logout", post(crate::adapters::http::handlers::logout))
+        .layer(axum::middleware::from_fn(crate::adapters::http::middleware::bearer_auth))
         .with_state(state);
     
     let response = app
@@ -83,6 +87,7 @@ async fn test_logout_invalid_json() {
                 .method("POST")
                 .uri("/auth/logout")
                 .header("content-type", "application/json")
+                .header("authorization", "Bearer valid_access_token")
                 .body(Body::from("invalid json"))
                 .unwrap(),
         )

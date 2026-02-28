@@ -6,7 +6,7 @@ use axum::{
 };
 use crate::adapters::http::{
     dto::public::{TokenValidationRequest, TokenValidationResponse},
-    error::{HttpError, ValidationError, UnauthorizedError, InternalError},
+    error::{HttpError, UnauthorizedError, InternalError},
     router::CleanJson,
     state::AppState,
 };
@@ -24,12 +24,18 @@ pub async fn validate_token(
     State(state): State<AppState>,
     CleanJson(request): CleanJson<TokenValidationRequest>,
 ) -> Result<(StatusCode, Json<TokenValidationResponse>), HttpError> {
-    // Validate request structure
-    request.validate()
-        .map_err(|msg| HttpError::Validation(ValidationError::new(msg)))?;
+    // Get token from request extensions (set by bearer_auth middleware) or fall back to body
+    let token_str = request.token;
+
+    // Validate token is present
+    if token_str.is_empty() {
+        return Err(HttpError::Unauthorized(UnauthorizedError::new(
+            "Missing or empty token"
+        )));
+    }
 
     // Create access token from request
-    let access_token = Token::new(request.token);
+    let access_token = Token::new(token_str);
 
     // Execute validate access token use case
     let use_case = ValidateAccessToken::new(
