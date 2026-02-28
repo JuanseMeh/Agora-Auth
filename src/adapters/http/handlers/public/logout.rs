@@ -1,16 +1,17 @@
 // Public logout handler
 use axum::{
-    extract::State,
+    extract::{State, Extension},
     http::StatusCode,
     Json,
 };
 use crate::adapters::http::{
     dto::public::{LogoutRequest, LogoutResponse},
-    error::{HttpError, ValidationError, UnauthorizedError, InternalError},
+    error::{HttpError, UnauthorizedError, InternalError},
     router::CleanJson,
     state::AppState,
 };
 use crate::core::usecases::revoke_session::{RevokeSession, RevokeSessionInput};
+use crate::core::usecases::validate_access_token::{ValidateAccessToken, ValidateAccessTokenInput};
 use crate::core::token::Token;
 use crate::core::error::CoreError;
 
@@ -23,37 +24,38 @@ use crate::core::error::CoreError;
 /// - 500 Internal Server Error on server failure
 pub async fn logout(
     State(state): State<AppState>,
-    CleanJson(request): CleanJson<LogoutRequest>,
+    Extension(bearer_token): Extension<String>,
+    CleanJson(_request): CleanJson<LogoutRequest>,
 ) -> Result<(StatusCode, Json<LogoutResponse>), HttpError> {
-    // Validate request structure
-    request.validate()
-        .map_err(|msg| HttpError::Validation(ValidationError::new(msg)))?;
+    // Use Bearer token from middleware to get session_id
+    let access_token = Token::new(bearer_token);
+    
+    // Validate the access token to extract session_id
+    let use_case = ValidateAccessToken::new(
+        &*state.token_service,
+        &*state.session_repo,
+    );
 
-    // If refresh_token is provided, validate it first
-    let session_id = if let Some(refresh_token) = request.refresh_token {
-        let token = Token::new(refresh_token);
-        
-        // Validate the refresh token signature
-        let claims = state.token_service.validate_refresh_token(&token)
-            .map_err(|_| HttpError::Unauthorized(UnauthorizedError::new("invalid refresh token")))?;
-        
-        // Extract session_id from validated token claims
-        extract_session_id(&claims)
-            .ok_or_else(|| HttpError::Unauthorized(UnauthorizedError::new("session id not found in token")))?
-    } else if let Some(session_id) = request.session_id {
-        session_id
-    } else {
-        return Err(HttpError::Validation(ValidationError::new(
-            "either session_id or refresh_token must be provided"
+    let output = use_case.execute(ValidateAccessTokenInput { access_token }).await
+        .map_err(|e| HttpError::Internal(InternalError::new(format!("token validation failed: {}", e))))?;
+
+    // Check if token is valid
+    if !output.valid {
+        return Err(HttpError::Unauthorized(UnauthorizedError::new(
+            output.reason.as_deref().unwrap_or("invalid token")
         )));
-    };
+    }
+
+    // Extract session_id from validated token claims
+    let session_id = output.session_id
+        .ok_or_else(|| HttpError::Unauthorized(UnauthorizedError::new("session id not found in token")))?;
 
     // Execute revoke session use case
     let use_case = RevokeSession::new(&*state.session_repo);
 
     let input = RevokeSessionInput {
         session_id: Some(session_id),
-        refresh_token_hash: None, // We already validated the token, use session_id
+        refresh_token_hash: None,
     };
 
     let output = use_case.execute(input).await
@@ -73,13 +75,4 @@ pub async fn logout(
     };
 
     Ok((StatusCode::OK, Json(response)))
-}
-
-/// Extract session_id from token claims JSON
-fn extract_session_id(claims: &str) -> Option<String> {
-    claims
-        .split("\"sid\":\"")
-        .nth(1)
-        .and_then(|s| s.split('"').next())
-        .map(|s| s.to_string())
 }
