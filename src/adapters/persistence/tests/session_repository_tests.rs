@@ -11,6 +11,7 @@ use crate::adapters::persistence::{
     to_uuid,
 };
 use chrono::Utc;
+use uuid::Uuid;
 
 /// Helper to get test database URL from environment or use docker-compose default
 fn get_test_database_url() -> String {
@@ -153,8 +154,8 @@ async fn test_session_is_active() {
 
     // Create an active session
     let session = SessionRow {
-        id: "550e8400-e29b-41d4-a716-446655440020".to_string(),
-        user_id: "550e8400-e29b-41d4-a716-446655440021".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "$2b$12$hash".to_string(),
         created_at: now,
         expires_at,
@@ -181,8 +182,8 @@ async fn test_session_is_expired() {
 
     // Create an expired session
     let session = SessionRow {
-        id: "550e8400-e29b-41d4-a716-446655440030".to_string(),
-        user_id: "550e8400-e29b-41d4-a716-446655440031".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "$2b$12$hash".to_string(),
         created_at: now - chrono::Duration::days(10),
         expires_at: now - chrono::Duration::days(3),
@@ -210,8 +211,8 @@ async fn test_session_is_revoked() {
 
     // Create a revoked session
     let session = SessionRow {
-        id: "550e8400-e29b-41d4-a716-446655440040".to_string(),
-        user_id: "550e8400-e29b-41d4-a716-446655440041".to_string(),
+        id: Uuid::new_v4(),
+        user_id: Uuid::new_v4(),
         refresh_token_hash: "$2b$12$hash".to_string(),
         created_at: now,
         expires_at,
