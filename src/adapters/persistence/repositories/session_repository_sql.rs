@@ -108,6 +108,8 @@ impl SessionRepositorySql {
                    revoked_at, ip_address, user_agent, updated_at
             FROM auth_session
             WHERE refresh_token_hash = $1
+              AND revoked_at IS NULL
+              AND expires_at > CURRENT_TIMESTAMP
         "#;
 
         let row = sqlx::query_as::<_, SessionRow>(QUERY)
@@ -205,6 +207,41 @@ impl SessionRepositorySql {
         Ok(result.rows_affected())
     }
 
+    /// Find a session by session ID.
+    ///
+    /// Returns the session only if it is not revoked and not expired.
+    ///
+    /// # Errors
+    ///
+    /// Returns `PersistenceError::Execution(ExecutionError::NotFound)` if no session exists.
+    pub async fn find_by_id(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionRow, PersistenceError> {
+        const QUERY: &str = r#"
+            SELECT id, user_id, refresh_token_hash, created_at, expires_at,
+                   revoked_at, ip_address, user_agent, updated_at
+            FROM auth_session
+            WHERE id = $1::uuid
+              AND revoked_at IS NULL
+              AND expires_at > CURRENT_TIMESTAMP
+        "#;
+
+        let row = sqlx::query_as::<_, SessionRow>(QUERY)
+            .bind(session_id)
+            .fetch_optional(self.db.pool())
+            .await
+            .map_err(|e| {
+                PersistenceError::Execution(ExecutionError::query_failed(format!(
+                    "failed to query session by id: {}",
+                    e
+                )))
+            })?
+            .ok_or_else(|| PersistenceError::Execution(ExecutionError::not_found("Session")))?;
+
+        Ok(row)
+    }
+
     /// Get the database pool reference.
     pub fn db(&self) -> &Database {
         &self.db
@@ -212,11 +249,11 @@ impl SessionRepositorySql {
 }
 
 impl SessionRepository for SessionRepositorySql {
-    fn create_session(&self, user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> futures::future::BoxFuture<'_, ()> {
+    fn create_session(&self, session_id: &str, user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> futures::future::BoxFuture<'_, ()> {
+        let session_id = session_id.to_string();
         let user_id = user.id.clone();
         let refresh_token_hash = refresh_token_hash.to_string();
         let metadata = metadata.to_string();
-        let session_id = uuid::Uuid::new_v7(uuid::Timestamp::now(uuid::NoContext)).to_string();
         let expires_at = Utc::now() + chrono::Duration::days(7); // Default 7-day session
         
         async move {
@@ -236,10 +273,33 @@ impl SessionRepository for SessionRepositorySql {
     fn find_by_refresh_token_hash(&self, hash: &str) -> futures::future::BoxFuture<'_, Option<Session>> {
         let hash = hash.to_string();
         async move {
-            self.find_by_refresh_token_hash(&hash)
-                .await
-                .ok()
-                .map(|_| Session {})
+            match self.find_by_refresh_token_hash(&hash).await {
+                Ok(_session) => {
+                    tracing::debug!("[SESSION_REPO] Session found for hash");
+                    Some(Session {})
+                }
+                Err(e) => {
+                    tracing::error!("[SESSION_REPO] Error finding session: {:?}", e);
+                    None
+                }
+            }
+        }
+        .boxed()
+    }
+
+    fn find_by_id(&self, session_id: &str) -> futures::future::BoxFuture<'_, Option<Session>> {
+        let session_id = session_id.to_string();
+        async move {
+            match self.find_by_id(&session_id).await {
+                Ok(_session) => {
+                    tracing::debug!("[SESSION_REPO] Session found for id");
+                    Some(Session {})
+                }
+                Err(e) => {
+                    tracing::error!("[SESSION_REPO] Error finding session by id: {:?}", e);
+                    None
+                }
+            }
         }
         .boxed()
     }
@@ -271,6 +331,7 @@ impl SessionRepository for SessionRepositorySql {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use uuid::Uuid;
 
     #[test]
     fn test_session_row_is_active() {
@@ -281,8 +342,8 @@ mod tests {
         let past = now - chrono::Duration::hours(1);
 
         let mut row = SessionRow {
-            id: "session1".to_string(),
-            user_id: "user123".to_string(),
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             refresh_token_hash: "hash".to_string(),
             created_at: now,
             expires_at: future,
@@ -313,8 +374,8 @@ mod tests {
         let past = now - chrono::Duration::hours(1);
 
         let mut row = SessionRow {
-            id: "session1".to_string(),
-            user_id: "user123".to_string(),
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             refresh_token_hash: "hash".to_string(),
             created_at: now,
             expires_at: future,
@@ -338,8 +399,8 @@ mod tests {
         let future = now + chrono::Duration::hours(1);
 
         let row = SessionRow {
-            id: "session1".to_string(),
-            user_id: "user123".to_string(),
+            id: Uuid::new_v4(),
+            user_id: Uuid::new_v4(),
             refresh_token_hash: "hash".to_string(),
             created_at: now,
             expires_at: future,

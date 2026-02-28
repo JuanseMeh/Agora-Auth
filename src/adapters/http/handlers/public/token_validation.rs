@@ -32,7 +32,10 @@ pub async fn validate_token(
     let access_token = Token::new(request.token);
 
     // Execute validate access token use case
-    let use_case = ValidateAccessToken::new(&*state.token_service);
+    let use_case = ValidateAccessToken::new(
+        &*state.token_service,
+        &*state.session_repo,
+    );
 
     let input = ValidateAccessTokenInput {
         access_token,

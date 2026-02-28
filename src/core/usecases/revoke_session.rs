@@ -4,6 +4,7 @@
 //!
 //! Responsibilities:
 //! - Lookup session by session_id or refresh token hash
+//! - Validate session is active before revocation
 //! - Mark session as revoked with timestamp
 //! - Optionally blacklist the associated access token
 
@@ -56,11 +57,18 @@ impl<'a> RevokeSession<'a> {
             ).into());
         };
 
+        // Step 2: Validate session exists and is active before revocation
+        // This mirrors the pattern used in ValidateAccessToken:
+        // "session revoked or expired" error when session not found
+        let session = self.session_repo.find_by_id(&session_id).await;
+        if session.is_none() {
+            return Err(CoreError::Authentication(AuthenticationError::user_not_found("session revoked or expired")));
+        }
 
-        // Step 2: Revoke the session
+        // Step 3: Revoke the session
         self.session_repo.revoke_session(&session_id).await;
 
-        // Step 3: Return success
+        // Step 4: Return success
         Ok(RevokeSessionOutput {
             revoked: true,
             session_id: Some(session_id),

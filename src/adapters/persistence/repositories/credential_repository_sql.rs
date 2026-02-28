@@ -205,6 +205,30 @@ impl CredentialRepositorySql {
         Ok(())
     }
 
+    /// Set failed attempts to a specific value (not increment).
+    async fn set_failed_attempts(&self, user_id: &str, attempts: u32) -> Result<(), PersistenceError> {
+        const QUERY: &str = r#"
+            UPDATE identity_credential
+            SET failed_attempts = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = $2::uuid
+        "#;
+
+        sqlx::query(QUERY)
+            .bind(attempts as i32)
+            .bind(user_id)
+            .execute(self.db.pool())
+            .await
+            .map_err(|e| {
+                PersistenceError::Execution(ExecutionError::query_failed(format!(
+                    "failed to set failed attempts: {}",
+                    e
+                )))
+            })?;
+
+        Ok(())
+    }
+
     /// Get the database pool reference.
     pub fn db(&self) -> &Database {
         &self.db
@@ -230,10 +254,16 @@ impl CredentialRepository for CredentialRepositorySql {
         .boxed()
     }
 
-    fn update_failed_attempts(&self, user_id: &str, _attempts: u32) -> futures::future::BoxFuture<'_, ()> {
+    fn update_failed_attempts(&self, user_id: &str, attempts: u32) -> futures::future::BoxFuture<'_, ()> {
         let user_id = user_id.to_string();
         async move {
-            let _ = self.increment_failed_attempts(&user_id).await;
+            if attempts == 0 {
+                // Reset to 0 on successful authentication
+                let _ = self.reset_failed_attempts(&user_id).await;
+            } else {
+                // Set to specific value on failed authentication
+                let _ = self.set_failed_attempts(&user_id, attempts).await;
+            }
         }
         .boxed()
     }
