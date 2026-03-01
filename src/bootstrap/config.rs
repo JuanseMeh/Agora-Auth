@@ -76,8 +76,15 @@ pub struct SecurityConfig {
 /// Service-to-service authentication configuration
 #[derive(Debug, Clone)]
 pub struct ServiceAuthConfig {
-    /// Comma-separated list of valid service API keys
+    /// Comma-separated list of valid service API keys (legacy)
     pub valid_service_keys: Vec<String>,
+    /// Service credentials: map of service_id -> hashed secret
+    /// Format: service_id:hashed_secret (comma-separated)
+    pub service_credentials: Vec<(String, String)>,
+    /// Service token signing key (base64 encoded)
+    pub service_token_signing_key: String,
+    /// Service token TTL in minutes
+    pub service_token_ttl_mins: u64,
 }
 
 /// Deployment mode determines operational characteristics
@@ -127,6 +134,9 @@ impl AuthConfig {
             },
             service_auth: ServiceAuthConfig {
                 valid_service_keys: Self::parse_service_keys()?,
+                service_credentials: Self::parse_service_credentials()?,
+                service_token_signing_key: Self::require_env("AUTH_SERVICE_TOKEN_SIGNING_KEY")?,
+                service_token_ttl_mins: Self::parse_u64("AUTH_SERVICE_TOKEN_TTL_MINS", 60)?,
             },
             mode,
         };
@@ -177,6 +187,17 @@ impl AuthConfig {
         anyhow::ensure!(
             !self.service_auth.valid_service_keys.is_empty(),
             "At least one service API key must be configured"
+        );
+
+        // Validate service token signing key
+        let service_key_bytes = base64::engine::general_purpose::STANDARD
+            .decode(&self.service_auth.service_token_signing_key)
+            .map_err(|_| anyhow::anyhow!("Service token signing key must be valid base64"))?;
+        
+        anyhow::ensure!(
+            service_key_bytes.len() >= 32,
+            "Service token signing key must be at least 32 bytes (256 bits), got {} bytes",
+            service_key_bytes.len()
         );
 
         // Validate hash parameters for production
@@ -255,6 +276,31 @@ impl AuthConfig {
         
         anyhow::ensure!(!keys.is_empty(), "AUTH_SERVICE_KEYS cannot be empty");
         Ok(keys)
+    }
+
+    /// Parse service credentials from environment.
+    /// Format: service_id:secret (comma-separated)
+    /// Note: The secret should already be hashed, or can be raw (will be hashed on first use)
+    fn parse_service_credentials() -> anyhow::Result<Vec<(String, String)>> {
+        let creds_str = Self::get_env("AUTH_SERVICE_CREDENTIALS", "");
+        if creds_str.is_empty() {
+            return Ok(Vec::new());
+        }
+        
+        let credentials: Vec<(String, String)> = creds_str
+            .split(',')
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| {
+                let parts: Vec<&str> = s.split(':').collect();
+                if parts.len() >= 2 {
+                    Ok((parts[0].trim().to_string(), parts[1].trim().to_string()))
+                } else {
+                    Err(anyhow::anyhow!("Invalid service credential format: {}", s))
+                }
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        
+        Ok(credentials)
     }
 }
 

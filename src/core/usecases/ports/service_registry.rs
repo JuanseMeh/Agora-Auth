@@ -1,4 +1,7 @@
-//! Service registry port for validating service API keys
+//! Service registry port for validating service API keys and credentials
+
+use crate::core::usecases::ports::PasswordHasher;
+use std::sync::Arc;
 
 /// Port for service registry operations
 /// 
@@ -25,6 +28,23 @@ pub trait ServiceRegistry: Send + Sync {
     /// * `true` - If the service is active
     /// * `false` - If the service is inactive or not found
     fn is_service_active(&self, service_name: &str) -> bool;
+
+    /// Validate service credentials using the provided password hasher
+    /// 
+    /// # Arguments
+    /// * `service_id` - The service identifier
+    /// * `service_secret` - The raw secret to validate
+    /// * `password_hasher` - Password hasher for comparing secrets
+    /// 
+    /// # Returns
+    /// * `Some(String)` - The service ID if credentials are valid
+    /// * `None` - If credentials are invalid
+    fn validate_credentials(
+        &self, 
+        service_id: &str, 
+        service_secret: &str,
+        password_hasher: &Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String>;
 }
 
 #[cfg(test)]
@@ -37,6 +57,7 @@ pub mod tests {
     pub struct MockServiceRegistry {
         valid_keys: RwLock<HashMap<String, String>>,
         active_services: RwLock<Vec<String>>,
+        credentials: RwLock<HashMap<String, String>>,
     }
     
     impl MockServiceRegistry {
@@ -51,9 +72,12 @@ pub mod tests {
                 "internal-service".to_string(),
             ];
             
+            let credentials = HashMap::new();
+            
             Self {
                 valid_keys: RwLock::new(valid_keys),
                 active_services: RwLock::new(active_services),
+                credentials: RwLock::new(credentials),
             }
         }
         
@@ -67,6 +91,12 @@ pub mod tests {
             let mut services = self.active_services.write().unwrap();
             services.retain(|s| s != service_name);
         }
+        
+        /// Add service credentials for testing
+        pub fn add_credentials(&self, service_id: &str, hashed_secret: &str) {
+            self.credentials.write().unwrap()
+                .insert(service_id.to_string(), hashed_secret.to_string());
+        }
     }
     
     impl ServiceRegistry for MockServiceRegistry {
@@ -76,6 +106,24 @@ pub mod tests {
         
         fn is_service_active(&self, service_name: &str) -> bool {
             self.active_services.read().unwrap().contains(&service_name.to_string())
+        }
+        
+        fn validate_credentials(
+            &self, 
+            service_id: &str, 
+            service_secret: &str,
+            password_hasher: &Arc<dyn PasswordHasher + Send + Sync>,
+        ) -> Option<String> {
+            use crate::core::credentials::StoredCredential;
+            
+            let creds = self.credentials.read().unwrap();
+            if let Some(stored_hash) = creds.get(service_id) {
+                let stored_credential = StoredCredential::from_hash(stored_hash.as_str());
+                if password_hasher.verify(service_secret, &stored_credential) {
+                    return Some(service_id.to_string());
+                }
+            }
+            None
         }
     }
 }

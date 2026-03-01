@@ -12,7 +12,7 @@ use crate::adapters::persistence::database::{Database, PoolConfig};
 use crate::adapters::persistence::repositories::{
     CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql,
 };
-use crate::core::usecases::ports::ServiceRegistry;
+use crate::core::usecases::ports::{PasswordHasher, ServiceRegistry};
 
 use super::config::AuthConfig;
 
@@ -138,8 +138,14 @@ fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<HmacTokenServ
 
 /// Build service registry for internal service authentication.
 fn build_service_registry(config: &AuthConfig) -> Arc<dyn ServiceRegistry + Send + Sync> {
-    // Simple in-memory service registry with configured keys
-    Arc::new(SimpleServiceRegistry::new(config.service_auth.valid_service_keys.clone()))
+    let mut registry = SimpleServiceRegistry::new(config.service_auth.valid_service_keys.clone());
+    
+    // Add service credentials from config
+    for (service_id, hashed_secret) in &config.service_auth.service_credentials {
+        registry.add_credentials(service_id, hashed_secret);
+    }
+    
+    Arc::new(registry)
 }
 
 /// Build HTTP application state for Axum.
@@ -169,6 +175,7 @@ fn build_app_state(
 #[derive(Clone)]
 struct SimpleServiceRegistry {
     valid_keys: std::collections::HashMap<String, String>,
+    credentials: std::collections::HashMap<String, String>,
 }
 
 impl SimpleServiceRegistry {
@@ -178,7 +185,15 @@ impl SimpleServiceRegistry {
         for (idx, key) in valid_keys.iter().enumerate() {
             key_map.insert(key.clone(), format!("service-{}", idx));
         }
-        Self { valid_keys: key_map }
+        Self { 
+            valid_keys: key_map,
+            credentials: std::collections::HashMap::new(),
+        }
+    }
+    
+    /// Add service credentials (service_id, hashed_secret)
+    fn add_credentials(&mut self, service_id: &str, hashed_secret: &str) {
+        self.credentials.insert(service_id.to_string(), hashed_secret.to_string());
     }
 }
 
@@ -190,5 +205,22 @@ impl ServiceRegistry for SimpleServiceRegistry {
     fn is_service_active(&self, _service_name: &str) -> bool {
         // All services are considered active in this simple implementation
         true
+    }
+    
+    fn validate_credentials(
+        &self, 
+        service_id: &str, 
+        service_secret: &str,
+        password_hasher: &Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String> {
+        use crate::core::credentials::StoredCredential;
+        
+        if let Some(stored_hash) = self.credentials.get(service_id) {
+            let stored_credential = StoredCredential::from_hash(stored_hash.as_str());
+            if password_hasher.verify(service_secret, &stored_credential) {
+                return Some(service_id.to_string());
+            }
+        }
+        None
     }
 }
