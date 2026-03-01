@@ -30,10 +30,16 @@ pub enum HttpError {
     Validation(ValidationError),
     /// Authentication failed (401 Unauthorized)
     Unauthorized(UnauthorizedError),
+    /// Service authentication failed (401 Unauthorized - for service-to-service)
+    ServiceUnauthorized(ServiceUnauthorizedError),
+    /// Forbidden - service lacks permissions (403 Forbidden)
+    Forbidden(ForbiddenError),
     /// Resource conflict (409 Conflict)
     Conflict(ConflictError),
     /// Resource not found (404 Not Found)
     NotFound(NotFoundError),
+    /// Identity not found (404 Not Found - specific for identity lookups)
+    IdentityNotFound(IdentityNotFoundError),
     /// Account locked (423 Locked)
     Locked(LockedError),
     /// Unexpected server error (500 Internal Server Error)
@@ -46,8 +52,11 @@ impl HttpError {
         match self {
             HttpError::Validation(_) => 400,
             HttpError::Unauthorized(_) => 401,
+            HttpError::ServiceUnauthorized(_) => 401,
+            HttpError::Forbidden(_) => 403,
             HttpError::Conflict(_) => 409,
             HttpError::NotFound(_) => 404,
+            HttpError::IdentityNotFound(_) => 404,
             HttpError::Locked(_) => 423,
             HttpError::Internal(_) => 500,
         }
@@ -60,7 +69,12 @@ impl HttpError {
 
     /// Returns true if this is an unauthorized error
     pub fn is_unauthorized(&self) -> bool {
-        matches!(self, HttpError::Unauthorized(_))
+        matches!(self, HttpError::Unauthorized(_) | HttpError::ServiceUnauthorized(_))
+    }
+
+    /// Returns true if this is a forbidden error
+    pub fn is_forbidden(&self) -> bool {
+        matches!(self, HttpError::Forbidden(_))
     }
 
     /// Returns true if this is a conflict error
@@ -70,7 +84,7 @@ impl HttpError {
 
     /// Returns true if this is a not found error
     pub fn is_not_found(&self) -> bool {
-        matches!(self, HttpError::NotFound(_))
+        matches!(self, HttpError::NotFound(_) | HttpError::IdentityNotFound(_))
     }
 
     /// Returns true if this is an internal error
@@ -89,8 +103,11 @@ impl fmt::Display for HttpError {
         match self {
             HttpError::Validation(e) => write!(f, "Validation error: {}", e),
             HttpError::Unauthorized(e) => write!(f, "Unauthorized: {}", e),
+            HttpError::ServiceUnauthorized(e) => write!(f, "Service unauthorized: {}", e),
+            HttpError::Forbidden(e) => write!(f, "Forbidden: {}", e),
             HttpError::Conflict(e) => write!(f, "Conflict: {}", e),
             HttpError::NotFound(e) => write!(f, "Not found: {}", e),
+            HttpError::IdentityNotFound(e) => write!(f, "Identity not found: {}", e),
             HttpError::Locked(e) => write!(f, "Locked: {}", e),
             HttpError::Internal(e) => write!(f, "Internal error: {}", e),
         }
@@ -165,6 +182,84 @@ impl UnauthorizedError {
 impl fmt::Display for UnauthorizedError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.reason)
+    }
+}
+
+/// Service-to-service authentication error (401)
+#[derive(Debug, Clone)]
+pub struct ServiceUnauthorizedError {
+    pub message: String,
+    pub service_id: Option<String>,
+}
+
+impl ServiceUnauthorizedError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            service_id: None,
+        }
+    }
+
+    pub fn with_service_id(message: impl Into<String>, service_id: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            service_id: Some(service_id.into()),
+        }
+    }
+}
+
+impl fmt::Display for ServiceUnauthorizedError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+/// Forbidden error - service lacks permissions (403)
+#[derive(Debug, Clone)]
+pub struct ForbiddenError {
+    pub message: String,
+    pub required_permission: Option<String>,
+}
+
+impl ForbiddenError {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            required_permission: None,
+        }
+    }
+
+    pub fn with_permission(message: impl Into<String>, permission: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+            required_permission: Some(permission.into()),
+        }
+    }
+}
+
+impl fmt::Display for ForbiddenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+/// Identity not found error (404)
+#[derive(Debug, Clone)]
+pub struct IdentityNotFoundError {
+    pub user_id: String,
+}
+
+impl IdentityNotFoundError {
+    pub fn new(user_id: impl Into<String>) -> Self {
+        Self {
+            user_id: user_id.into(),
+        }
+    }
+}
+
+impl fmt::Display for IdentityNotFoundError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Identity with ID {} not found", self.user_id)
     }
 }
 
