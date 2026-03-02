@@ -26,6 +26,8 @@
 //! - [`RefreshSession`]
 //! - [`RevokeSession`]
 //! - [`ValidateAccessToken`]
+//! - [`IssueServiceToken`]
+//! - [`IssueSessionForIdentity`]
 //!
 //! # Policies
 //!
@@ -43,6 +45,8 @@
 
 pub mod authenticate_user;
 pub mod issue_session;
+pub mod issue_service_token;
+pub mod issue_session_for_identity;
 pub mod refresh_session;
 pub mod revoke_session;
 pub mod validate_access_token;
@@ -52,6 +56,8 @@ pub mod ports;
 
 pub use authenticate_user::*;
 pub use issue_session::*;
+pub use issue_service_token::*;
+pub use issue_session_for_identity::*;
 pub use refresh_session::*;
 pub use revoke_session::*;
 pub use validate_access_token::*;

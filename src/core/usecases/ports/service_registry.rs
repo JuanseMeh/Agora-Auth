@@ -43,7 +43,7 @@ pub trait ServiceRegistry: Send + Sync {
         &self, 
         service_id: &str, 
         service_secret: &str,
-        password_hasher: &Arc<dyn PasswordHasher + Send + Sync>,
+        password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
     ) -> Option<String>;
 }
 
@@ -112,7 +112,7 @@ pub mod tests {
             &self, 
             service_id: &str, 
             service_secret: &str,
-            password_hasher: &Arc<dyn PasswordHasher + Send + Sync>,
+            password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
         ) -> Option<String> {
             use crate::core::credentials::StoredCredential;
             

@@ -127,10 +127,20 @@ fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<HmacTokenServ
     let token_service = HmacTokenService::from_secret_key(&signing_key)
         .map_err(|e| anyhow::anyhow!("Failed to initialize token service: {:?}", e))?;
     
+    // Decode service token signing key (separate key for service-to-service auth)
+    let service_signing_key = base64::engine::general_purpose::STANDARD
+        .decode(&config.service_auth.service_token_signing_key)
+        .map_err(|e| anyhow::anyhow!("Failed to decode service token signing key: {}", e))?;
+    
+    let token_service = token_service
+        .with_service_token_key(&service_signing_key)
+        .map_err(|e| anyhow::anyhow!("Failed to set service token key: {:?}", e))?;
+    
     tracing::info!(
-        "Token service initialized (access_ttl={}m, refresh_ttl={}d)",
+        "Token service initialized (access_ttl={}m, refresh_ttl={}d, service_ttl={}m)",
         config.crypto.access_token_ttl_mins,
-        config.crypto.refresh_token_ttl_days
+        config.crypto.refresh_token_ttl_days,
+        config.service_auth.service_token_ttl_mins
     );
     
     Ok(token_service)
@@ -211,7 +221,7 @@ impl ServiceRegistry for SimpleServiceRegistry {
         &self, 
         service_id: &str, 
         service_secret: &str,
-        password_hasher: &Arc<dyn PasswordHasher + Send + Sync>,
+        password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
     ) -> Option<String> {
         use crate::core::credentials::StoredCredential;
         

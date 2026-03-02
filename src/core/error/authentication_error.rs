@@ -32,6 +32,10 @@ pub enum AuthenticationError {
         provider: String,
         reason: String,
     },
+    /// Invalid credentials provided
+    InvalidCredentials,
+    /// Service is not active or not authorized
+    ServiceNotActive,
 }
 
 impl AuthenticationError {
@@ -73,6 +77,16 @@ impl AuthenticationError {
         matches!(self, Self::AccountLocked { .. })
     }
 
+    /// Returns true if this error is an InvalidCredentials variant
+    pub fn is_invalid_credentials(&self) -> bool {
+        matches!(self, Self::InvalidCredentials)
+    }
+
+    /// Returns true if this error is a ServiceNotActive variant
+    pub fn is_service_not_active(&self) -> bool {
+        matches!(self, Self::ServiceNotActive)
+    }
+
     /// Create an ExternalProviderRejected error
     pub fn external_provider_rejected(
         provider: impl Into<String>,
@@ -107,6 +121,12 @@ impl std::fmt::Display for AuthenticationError {
                     "External identity provider '{}' rejected authentication: {}",
                     provider, reason
                 )
+            }
+            Self::InvalidCredentials => {
+                write!(f, "Invalid credentials provided")
+            }
+            Self::ServiceNotActive => {
+                write!(f, "Service is not active or not authorized")
             }
         }
     }
