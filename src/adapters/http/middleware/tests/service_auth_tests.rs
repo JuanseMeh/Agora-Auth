@@ -14,7 +14,7 @@ use axum::{
 use tower::ServiceExt;
 
 use crate::adapters::http::middleware::service_auth;
-use crate::core::usecases::ports::ServiceRegistry;
+use crate::core::usecases::ports::{PasswordHasher, ServiceRegistry};
 
 // Mock ServiceRegistry for testing
 struct MockServiceRegistry {
@@ -50,6 +50,15 @@ impl ServiceRegistry for MockServiceRegistry {
     
     fn is_service_active(&self, service_name: &str) -> bool {
         self.active_services.contains(&service_name.to_string())
+    }
+    
+    fn validate_credentials(
+        &self, 
+        _service_id: &str, 
+        _service_secret: &str,
+        _password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String> {
+        None
     }
 }
 

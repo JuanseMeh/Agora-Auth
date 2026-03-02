@@ -84,6 +84,10 @@ impl TokenService for MockTokenService {
         *self.refresh_tokens_issued.write().unwrap() += 1;
         Token::new(&format!("refresh_token_for_{}", subject))
     }
+
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(&format!("service_token_for_{}", subject))
+    }
     
     fn validate_access_token(&self, token: &Token) -> Result<String, ()> {
         // Simple mock validation - just check if token contains expected format
@@ -98,6 +102,14 @@ impl TokenService for MockTokenService {
         // Simple mock validation
         if token.value().contains("refresh_token_for_") {
             Ok("user123".to_string())
+        } else {
+            Err(())
+        }
+    }
+
+    fn validate_service_token(&self, token: &Token) -> Result<String, ()> {
+        if token.value().contains("service_token_for_") {
+            Ok("service123".to_string())
         } else {
             Err(())
         }

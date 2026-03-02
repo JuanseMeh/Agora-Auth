@@ -103,6 +103,10 @@ impl TokenService for MockTokenService {
     fn issue_refresh_token(&self, user_id: &str, _claims: &str) -> Token {
         Token::new(format!("refresh_{}", user_id))
     }
+
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(format!("service_{}", subject))
+    }
     
     fn validate_access_token(&self, _token: &Token) -> Result<String, ()> {
         Ok(r#"{"sub":"user123","type":"access"}"#.to_string())
@@ -110,6 +114,10 @@ impl TokenService for MockTokenService {
     
     fn validate_refresh_token(&self, _token: &Token) -> Result<String, ()> {
         Ok(r#"{"sub":"user123","type":"refresh"}"#.to_string())
+    }
+
+    fn validate_service_token(&self, _token: &Token) -> Result<String, ()> {
+        Ok(r#"{"sub":"service123","type":"service"}"#.to_string())
     }
 }
 
@@ -130,6 +138,15 @@ impl ServiceRegistry for MockServiceRegistry {
     
     fn is_service_active(&self, _service_name: &str) -> bool {
         true
+    }
+    
+    fn validate_credentials(
+        &self, 
+        _service_id: &str, 
+        _service_secret: &str,
+        _password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String> {
+        None
     }
 }
 

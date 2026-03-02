@@ -133,3 +133,55 @@ fn test_authentication_error_clone() {
     let cloned = err.clone();
     assert_eq!(err, cloned);
 }
+
+#[test]
+fn test_invalid_credentials() {
+    let err = AuthenticationError::InvalidCredentials;
+    assert_eq!(err, AuthenticationError::InvalidCredentials);
+}
+
+#[test]
+fn test_invalid_credentials_display() {
+    let err = AuthenticationError::InvalidCredentials;
+    assert_eq!(err.to_string(), "Invalid credentials provided");
+}
+
+#[test]
+fn test_is_invalid_credentials_true() {
+    let err = AuthenticationError::InvalidCredentials;
+    assert!(err.is_invalid_credentials());
+}
+
+#[test]
+fn test_is_invalid_credentials_false() {
+    let err = AuthenticationError::user_not_found("test");
+    assert!(!err.is_invalid_credentials());
+}
+
+// ============================================================================
+// Tests for new ServiceNotActive variant
+// ============================================================================
+
+#[test]
+fn test_service_not_active() {
+    let err = AuthenticationError::ServiceNotActive;
+    assert_eq!(err, AuthenticationError::ServiceNotActive);
+}
+
+#[test]
+fn test_service_not_active_display() {
+    let err = AuthenticationError::ServiceNotActive;
+    assert_eq!(err.to_string(), "Service is not active or not authorized");
+}
+
+#[test]
+fn test_is_service_not_active_true() {
+    let err = AuthenticationError::ServiceNotActive;
+    assert!(err.is_service_not_active());
+}
+
+#[test]
+fn test_is_service_not_active_false() {
+    let err = AuthenticationError::user_not_found("test");
+    assert!(!err.is_service_not_active());
+}

@@ -82,6 +82,9 @@ fn test_security_config_default() {
 fn test_service_auth_config() {
     let config = ServiceAuthConfig {
         valid_service_keys: vec!["key1".to_string(), "key2".to_string()],
+        service_credentials: vec![],
+        service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+        service_token_ttl_mins: 60,
     };
     assert_eq!(config.valid_service_keys.len(), 2);
     assert_eq!(config.valid_service_keys[0], "key1");
@@ -115,6 +118,9 @@ fn test_auth_config_validation_valid() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
     };
@@ -150,6 +156,9 @@ fn test_auth_config_validation_invalid_ttl() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
     };
@@ -188,6 +197,9 @@ fn test_auth_config_validation_short_signing_key() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
     };
@@ -226,6 +238,9 @@ fn test_auth_config_validation_zero_max_attempts() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
     };
@@ -264,6 +279,9 @@ fn test_auth_config_validation_production_requirements() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
     };
@@ -302,6 +320,9 @@ fn test_auth_config_validation_development_allows_lower_security() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Development,
     };
@@ -337,6 +358,9 @@ fn test_auth_config_validation_empty_service_keys() {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec![], // Empty - should fail
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
     };
@@ -347,3 +371,4 @@ fn test_auth_config_validation_empty_service_keys() {
     let err_msg = format!("{}", result.unwrap_err());
     assert!(err_msg.contains("service API key"));
 }
+
