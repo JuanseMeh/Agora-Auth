@@ -32,6 +32,7 @@ async fn test_logout_missing_both_session_and_token() {
         3600,  // access_token_ttl_seconds
         30,    // refresh_token_ttl_days
         true,  // rotate_refresh_tokens
+        3600,  // service_token_ttl_seconds
     );
     
     let app = Router::new()
@@ -74,6 +75,7 @@ async fn test_logout_invalid_json() {
         3600,
         30,
         true,
+        3600,  // service_token_ttl_seconds
     );
     
     let app = Router::new()
