@@ -178,6 +178,7 @@ fn build_app_state(
         config.crypto.access_token_ttl_mins * 60, // Convert to seconds
         config.crypto.refresh_token_ttl_days,
         true, // rotate_refresh_tokens
+        config.service_auth.service_token_ttl_mins * 60, // Convert to seconds
     )
 }
 
