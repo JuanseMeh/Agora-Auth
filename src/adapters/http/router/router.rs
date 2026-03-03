@@ -12,13 +12,18 @@ use crate::adapters::http::{
     state::AppState,
 };
 
-use super::{internal_routes, public_routes};
+use super::{protected_internal_routes, public_internal_routes, public_routes};
 
 /// Build the complete HTTP router with all routes and middleware
 pub fn create_router(state: AppState) -> Router {
     Router::new()
-        .nest("/internal", internal_routes(state.clone()))
+        // Internal routes - public (no auth required)
+        .nest("/internal", public_internal_routes())
+        // Internal routes - protected (require X-Service-Key header)
+        .nest("/internal", protected_internal_routes(state.clone()))
+        // Public routes
         .nest("/public", public_routes())
+        // Health check routes
         .nest("/health", health_routes())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
