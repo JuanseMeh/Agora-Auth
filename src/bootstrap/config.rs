@@ -279,26 +279,57 @@ impl AuthConfig {
     }
 
     /// Parse service credentials from environment.
-    /// Format: service_id:secret (comma-separated)
-    /// Note: The secret should already be hashed, or can be raw (will be hashed on first use)
+    /// Format: service_id:secret (comma-separated, but secret can contain commas if using PHC format)
+    /// Note: The secret should be an Argon2 hash in PHC format: $argon2id$v=19$m=65536,t=3,p=4$...
+    /// Note: In .env files, use $$ to escape $ (e.g., $$argon2id$$v=19$$m=65536,t=3,p=4$$...)
     fn parse_service_credentials() -> anyhow::Result<Vec<(String, String)>> {
         let creds_str = Self::get_env("AUTH_SERVICE_CREDENTIALS", "");
         if creds_str.is_empty() {
             return Ok(Vec::new());
         }
         
-        let credentials: Vec<(String, String)> = creds_str
-            .split(',')
-            .filter(|s| !s.trim().is_empty())
-            .map(|s| {
-                let parts: Vec<&str> = s.split(':').collect();
-                if parts.len() >= 2 {
-                    Ok((parts[0].trim().to_string(), parts[1].trim().to_string()))
-                } else {
-                    Err(anyhow::anyhow!("Invalid service credential format: {}", s))
+        // Note: The value should be quoted in .env to prevent $ variable expansion
+        // e.g., AUTH_SERVICE_CREDENTIALS="user_service:$argon2id$..."
+        
+        // Log the actual raw value from env
+        tracing::info!("[CONFIG] Parsed service credentials raw (first 60 chars): '{}'", &creds_str[..60.min(creds_str.len())]);
+        
+        // Parse credentials - handle PHC format which contains commas
+        // Format: service_id:$argon2id$...,service_id2:$argon2id$...
+        // We split on comma only when it's not inside the PHC hash
+        let mut credentials: Vec<(String, String)> = Vec::new();
+        let mut current_cred = String::new();
+        let mut in_phc_hash = false;
+        
+        for ch in creds_str.chars() {
+            if ch == ',' && !in_phc_hash {
+                // Split here - we're at a credential separator
+                if !current_cred.trim().is_empty() {
+                    let parts: Vec<&str> = current_cred.splitn(2, ':').collect();
+                    if parts.len() == 2 {
+                        credentials.push((parts[0].trim().to_string(), parts[1].trim().to_string()));
+                    }
                 }
-            })
-            .collect::<anyhow::Result<Vec<_>>>()?;
+                current_cred = String::new();
+            } else {
+                current_cred.push(ch);
+                
+                // Detect start of PHC hash format (argon2id or argon2)
+                // Once we see $argon2 or $argon2id, we're in the hash portion
+                // and should not split on commas until we see the closing $$
+                if current_cred.ends_with("$argon2id$") || current_cred.ends_with("$argon2$") {
+                    in_phc_hash = true;
+                }
+            }
+        }
+        
+        // Don't forget the last credential
+        if !current_cred.trim().is_empty() {
+            let parts: Vec<&str> = current_cred.splitn(2, ':').collect();
+            if parts.len() == 2 {
+                credentials.push((parts[0].trim().to_string(), parts[1].trim().to_string()));
+            }
+        }
         
         Ok(credentials)
     }

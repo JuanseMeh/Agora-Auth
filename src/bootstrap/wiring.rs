@@ -150,10 +150,21 @@ fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<HmacTokenServ
 fn build_service_registry(config: &AuthConfig) -> Arc<dyn ServiceRegistry + Send + Sync> {
     let mut registry = SimpleServiceRegistry::new(config.service_auth.valid_service_keys.clone());
     
-    // Add service credentials from config
+// Add service credentials from config
     for (service_id, hashed_secret) in &config.service_auth.service_credentials {
+        let prefix_len = 20.min(hashed_secret.len());
+        tracing::debug!(
+            "[BOOTSTRAP] Loading service credential for service_id: {}, hash_prefix: {}",
+            service_id,
+            &hashed_secret[..prefix_len]
+        );
         registry.add_credentials(service_id, hashed_secret);
     }
+    
+    tracing::info!(
+        "[BOOTSTRAP] Service registry initialized with {} credentials",
+        config.service_auth.service_credentials.len()
+    );
     
     Arc::new(registry)
 }
