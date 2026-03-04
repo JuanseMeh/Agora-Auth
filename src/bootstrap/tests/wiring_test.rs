@@ -31,6 +31,9 @@ pub async fn initialize_test_components() -> anyhow::Result<AppComponents> {
         },
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["test-service-key".to_string()],
+            service_credentials: vec![],
+            service_token_signing_key: "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLWhzMjU2".to_string(),
+            service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Test,
     };

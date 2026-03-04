@@ -25,5 +25,5 @@ Each handler is responsible for:
 pub mod internal;
 pub mod public;
 
-pub use internal::create_credential;
+pub use internal::{create_credential, issue_service_token, issue_session_tokens};
 pub use public::{authenticate, logout, refresh_token, validate_token};

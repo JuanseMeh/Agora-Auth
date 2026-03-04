@@ -23,7 +23,7 @@ pub mod auth;
 pub mod service_auth;
 
 pub use auth::bearer_auth;
-pub use service_auth::service_auth;
+pub use service_auth::{service_auth, service_jwt_auth, ServiceContext};
 
 #[cfg(test)]
 pub mod tests;

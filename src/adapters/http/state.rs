@@ -37,6 +37,8 @@ pub struct AppState {
     pub refresh_token_ttl_days: u64,
     /// Whether to rotate refresh tokens
     pub rotate_refresh_tokens: bool,
+    /// Service token TTL in seconds
+    pub service_token_ttl_seconds: u64,
 }
 
 impl AppState {
@@ -51,6 +53,7 @@ impl AppState {
         access_token_ttl_seconds: u64,
         refresh_token_ttl_days: u64,
         rotate_refresh_tokens: bool,
+        service_token_ttl_seconds: u64,
     ) -> Self {
         Self {
             identity_repo,
@@ -62,6 +65,7 @@ impl AppState {
             access_token_ttl_seconds,
             refresh_token_ttl_days,
             rotate_refresh_tokens,
+            service_token_ttl_seconds,
         }
     }
 }

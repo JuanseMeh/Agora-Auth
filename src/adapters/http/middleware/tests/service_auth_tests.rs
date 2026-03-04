@@ -1,4 +1,3 @@
-
 //! Comprehensive tests for service_auth middleware
 
 use std::sync::Arc;
@@ -14,7 +13,7 @@ use axum::{
 use tower::ServiceExt;
 
 use crate::adapters::http::middleware::service_auth;
-use crate::core::usecases::ports::ServiceRegistry;
+use crate::core::usecases::ports::{PasswordHasher, ServiceRegistry};
 
 // Mock ServiceRegistry for testing
 struct MockServiceRegistry {
@@ -50,6 +49,15 @@ impl ServiceRegistry for MockServiceRegistry {
     
     fn is_service_active(&self, service_name: &str) -> bool {
         self.active_services.contains(&service_name.to_string())
+    }
+    
+    fn validate_credentials(
+        &self, 
+        _service_id: &str, 
+        _service_secret: &str,
+        _password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String> {
+        None
     }
 }
 
@@ -297,4 +305,270 @@ async fn test_service_auth_unicode_in_key() {
         assert_eq!(body_str, "OK");
     }
     // If 401, that's also acceptable behavior for non-ASCII headers
+}
+
+// ============================================================================
+// Tests for service_jwt_auth middleware
+// ============================================================================
+
+use crate::adapters::http::middleware::service_jwt_auth;
+use crate::core::usecases::ports::TokenService;
+
+// Mock TokenService for testing JWT validation
+#[derive(Clone)]
+struct MockTokenService {
+    valid_tokens: std::collections::HashMap<String, String>,
+}
+
+impl MockTokenService {
+    fn new() -> Self {
+        let mut valid_tokens = std::collections::HashMap::new();
+        // Valid service token with typ: service
+        valid_tokens.insert(
+            "valid_service_token".to_string(),
+            r#"{"sub":"user_service","type":"service","exp":9999999999,"iss":"auth_service","aud":"auth_service"}"#.to_string(),
+        );
+        // Valid access token (should be rejected)
+        valid_tokens.insert(
+            "valid_access_token".to_string(),
+            r#"{"sub":"user123","type":"access","exp":9999999999,"iss":"auth_service","aud":"auth_service"}"#.to_string(),
+        );
+        Self { valid_tokens }
+    }
+    
+    fn with_custom_token(mut self, token: &str, claims: &str) -> Self {
+        self.valid_tokens.insert(token.to_string(), claims.to_string());
+        self
+    }
+}
+
+impl TokenService for MockTokenService {
+    fn issue_access_token(&self, _subject: &str, _claims: &str) -> crate::core::token::Token {
+        unimplemented!()
+    }
+    
+    fn issue_refresh_token(&self, _subject: &str, _claims: &str) -> crate::core::token::Token {
+        unimplemented!()
+    }
+    
+    fn issue_service_token(&self, _subject: &str, _claims: &str) -> crate::core::token::Token {
+        unimplemented!()
+    }
+    
+    fn validate_access_token(&self, _token: &crate::core::token::Token) -> Result<String, ()> {
+        unimplemented!()
+    }
+    
+    fn validate_refresh_token(&self, _token: &crate::core::token::Token) -> Result<String, ()> {
+        unimplemented!()
+    }
+    
+    fn validate_service_token(&self, token: &crate::core::token::Token) -> Result<String, ()> {
+        let token_str = token.value();
+        if let Some(claims) = self.valid_tokens.get(token_str) {
+            Ok(claims.clone())
+        } else {
+            Err(())
+        }
+    }
+}
+
+// Test handler for JWT middleware
+async fn jwt_success_handler() -> &'static str {
+    "JWT_OK"
+}
+
+// Layer to inject TokenService into request extensions
+async fn inject_test_token_service(
+    mut request: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    request.extensions_mut().insert(Arc::new(MockTokenService::new()) as Arc<dyn TokenService + Send + Sync>);
+    Ok(next.run(request).await)
+}
+
+fn test_jwt_router() -> Router {
+    Router::new()
+        .route("/jwt-test", get(jwt_success_handler))
+        .layer(axum_middleware::from_fn(service_jwt_auth))
+        .layer(axum_middleware::from_fn(inject_test_token_service))
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_valid_service_token() {
+    let app = test_jwt_router();
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "Bearer valid_service_token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), StatusCode::OK);
+    
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body_str = String::from_utf8(body.to_vec()).unwrap();
+    
+    assert_eq!(body_str, "JWT_OK");
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_invalid_token() {
+    let app = test_jwt_router();
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "Bearer invalid_token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_wrong_token_type() {
+    let app = test_jwt_router();
+    
+    // Use access token instead of service token - should be rejected
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "Bearer valid_access_token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_missing_header() {
+    let app = test_jwt_router();
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_empty_bearer_token() {
+    let app = test_jwt_router();
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "Bearer ")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_no_bearer_prefix() {
+    let app = test_jwt_router();
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "valid_service_token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    // Should fail because it doesn't start with "Bearer "
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_token_missing_sub_claim() {
+    // Test with a token that has no sub claim using a modified router setup
+    let mock_service = MockTokenService::new().with_custom_token(
+        "token_no_sub",
+        r#"{"type":"service","exp":9999999999}"#,
+    );
+    
+    // Inline router with custom token service injection
+    let app = Router::new()
+        .route("/jwt-test", get(jwt_success_handler))
+        .layer(axum_middleware::from_fn(service_jwt_auth))
+        .layer(axum_middleware::from_fn(move |mut req: Request, next: Next| {
+            req.extensions_mut().insert(Arc::new(mock_service.clone()) as Arc<dyn TokenService + Send + Sync>);
+            async move { next.run(req).await }
+        }));
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "Bearer token_no_sub")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    // Should fail because sub claim is missing
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn test_service_jwt_auth_token_empty_sub_claim() {
+    // Test with empty sub claim
+    let mock_service = MockTokenService::new().with_custom_token(
+        "token_empty_sub",
+        r#"{"sub":"","type":"service","exp":9999999999}"#,
+    );
+    
+    let app = Router::new()
+        .route("/jwt-test", get(jwt_success_handler))
+        .layer(axum_middleware::from_fn(service_jwt_auth))
+        .layer(axum_middleware::from_fn(move |mut req: Request, next: Next| {
+            req.extensions_mut().insert(Arc::new(mock_service.clone()) as Arc<dyn TokenService + Send + Sync>);
+            async move { next.run(req).await }
+        }));
+    
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/jwt-test")
+                .header("Authorization", "Bearer token_empty_sub")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    
+    // Should fail because sub claim is empty
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 }

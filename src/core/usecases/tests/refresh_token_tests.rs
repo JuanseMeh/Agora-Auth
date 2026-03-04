@@ -121,6 +121,10 @@ impl TokenService for MockTokenService {
         self.valid_tokens.write().unwrap().insert(token.value().to_string());
         token
     }
+
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(&format!("service_token_for_{}", subject))
+    }
     
     fn validate_access_token(&self, token: &Token) -> Result<String, ()> {
         if self.valid_tokens.read().unwrap().contains(token.value()) {
@@ -135,6 +139,14 @@ impl TokenService for MockTokenService {
         if self.valid_tokens.read().unwrap().contains(token.value()) {
             // Return claims with proper format including sub and sid fields
             Ok(r#"{"sub":"user123","type":"refresh","sid":"session_123"}"#.to_string())
+        } else {
+            Err(())
+        }
+    }
+
+    fn validate_service_token(&self, token: &Token) -> Result<String, ()> {
+        if token.value().contains("service_token_for_") {
+            Ok(r#"{"sub":"service123","type":"service"}"#.to_string())
         } else {
             Err(())
         }
