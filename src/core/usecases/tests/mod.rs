@@ -4,6 +4,8 @@
 
 pub mod authenticate_user_tests;
 pub mod issue_session_tests;
+pub mod issue_service_token_tests;
+pub mod issue_session_for_identity_tests;
 pub mod refresh_token_tests;
 pub mod revoke_session_tests;
 pub mod validate_access_token_tests;

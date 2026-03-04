@@ -32,6 +32,7 @@ async fn test_logout_missing_both_session_and_token() {
         3600,  // access_token_ttl_seconds
         30,    // refresh_token_ttl_days
         true,  // rotate_refresh_tokens
+        3600,  // service_token_ttl_seconds
     );
     
     let app = Router::new()
@@ -74,6 +75,7 @@ async fn test_logout_invalid_json() {
         3600,
         30,
         true,
+        3600,  // service_token_ttl_seconds
     );
     
     let app = Router::new()
@@ -173,6 +175,10 @@ impl TokenService for MockTokenService {
     fn issue_refresh_token(&self, _subject: &str, _claims: &str) -> Token {
         Token::new("refresh_token_123".to_string())
     }
+
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(format!("service_token_for_{}", subject))
+    }
     
     fn validate_access_token(&self, token: &Token) -> Result<String, ()> {
         if token.value() == "valid_access_token" {
@@ -184,6 +190,14 @@ impl TokenService for MockTokenService {
     
     fn validate_refresh_token(&self, token: &Token) -> Result<String, ()> {
         if token.value() == "valid_refresh_token" {
+            Ok("claims".to_string())
+        } else {
+            Err(())
+        }
+    }
+
+    fn validate_service_token(&self, token: &Token) -> Result<String, ()> {
+        if token.value().contains("service_token_for_") {
             Ok("claims".to_string())
         } else {
             Err(())
@@ -230,5 +244,14 @@ impl ServiceRegistry for MockServiceRegistry {
     
     fn is_service_active(&self, _service_id: &str) -> bool {
         true
+    }
+    
+    fn validate_credentials(
+        &self, 
+        _service_id: &str, 
+        _service_secret: &str,
+        _password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String> {
+        None
     }
 }

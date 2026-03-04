@@ -43,6 +43,10 @@ impl TokenService for MockTokenService {
     fn issue_refresh_token(&self, subject: &str, _claims: &str) -> Token {
         Token::new(&format!("refresh_token_for_{}", subject))
     }
+
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(&format!("service_token_for_{}", subject))
+    }
     
     fn validate_access_token(&self, token: &Token) -> Result<String, ()> {
         let token_value = token.value();
@@ -68,6 +72,14 @@ impl TokenService for MockTokenService {
         
         if self.valid_tokens.read().unwrap().contains(token_value) {
             Ok(r#"{"sub":"user123","type":"refresh"}"#.to_string())
+        } else {
+            Err(())
+        }
+    }
+
+    fn validate_service_token(&self, token: &Token) -> Result<String, ()> {
+        if token.value().contains("service_token_for_") {
+            Ok(r#"{"sub":"service123","type":"service"}"#.to_string())
         } else {
             Err(())
         }

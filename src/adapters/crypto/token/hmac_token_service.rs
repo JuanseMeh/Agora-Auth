@@ -51,6 +51,8 @@ struct JwtClaims {
 pub struct HmacTokenService {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
+    service_encoding_key: Option<EncodingKey>,
+    service_decoding_key: Option<DecodingKey>,
     algorithm: Algorithm,
     issuer: Option<String>,
     audience: Option<String>,
@@ -70,6 +72,8 @@ impl HmacTokenService {
         Ok(Self {
             encoding_key: key.encoding_key().clone(),
             decoding_key: key.decoding_key().clone(),
+            service_encoding_key: None,
+            service_decoding_key: None,
             algorithm: Algorithm::HS256,
             issuer: None,
             audience: None,
@@ -93,6 +97,25 @@ impl HmacTokenService {
             .map_err(|e| JwtError::invalid_key(e))?;
         
         Self::from_key(&hmac_key)
+    }
+
+    /// Set the service token key for signing/validating service-to-service tokens.
+    ///
+    /// # Arguments
+    ///
+    /// * `key` - 32-byte HMAC-SHA256 key for service tokens
+    ///
+    /// # Errors
+    ///
+    /// Returns `JwtError::InvalidKey` if the key is not valid HMAC material.
+    pub fn with_service_token_key(mut self, key: &[u8]) -> Result<Self, JwtError> {
+        let hmac_key = HmacKey::from_bytes(key)
+            .map_err(|e| JwtError::invalid_key(e))?;
+        
+        self.service_encoding_key = Some(hmac_key.encoding_key().clone());
+        self.service_decoding_key = Some(hmac_key.decoding_key().clone());
+        
+        Ok(self)
     }
 
     /// Set the expected issuer for token validation.
@@ -391,6 +414,129 @@ impl TokenService for HmacTokenService {
                 if let Some(session_id) = claims.session_id {
                     claims_map.insert("sid".to_string(), serde_json::Value::String(session_id));
                 }
+                
+                let claims_json = serde_json::to_string(&claims_map).unwrap_or_default();
+                Ok(claims_json)
+            }
+            Err(_) => Err(()),
+        }
+    }
+
+    fn issue_service_token(&self, subject: &str, claims: &str) -> Token {
+        // Use service token key if configured, otherwise fall back to main key
+        let encoding_key = self.service_encoding_key.as_ref()
+            .unwrap_or(&self.encoding_key);
+        
+        // Parse the claims JSON to extract identity information
+        // Service token claims format: {"sub":"service_id","type":"service","exp":123456,"iss":"auth_service","aud":"auth_service"}
+        let claims_json: serde_json::Value = serde_json::from_str(claims).unwrap_or_default();
+        
+        let service_id = claims_json.get("sub")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| subject.to_string());
+        
+        let identity = crate::core::identity::IdentityClaims {
+            user_id: Some(service_id.clone()),
+            workspace_id: None,
+        };
+
+        let now = chrono::Utc::now();
+        let expires = now + chrono::Duration::hours(1); // 1 hour default for service tokens
+
+        let token_claims = TokenClaims {
+            identity,
+            issued_at: now.to_rfc3339(),
+            expires_at: expires.to_rfc3339(),
+            not_before: None,
+            scopes: None,
+            token_type: Some("service".to_string()),
+        };
+
+        // Encode token
+        let exp = chrono::DateTime::parse_from_rfc3339(&token_claims.expires_at)
+            .map(|dt| dt.timestamp())
+            .unwrap_or_else(|_| (now + chrono::Duration::hours(1)).timestamp());
+        
+        let iat = chrono::DateTime::parse_from_rfc3339(&token_claims.issued_at)
+            .map(|dt| dt.timestamp())
+            .unwrap_or_else(|_| now.timestamp());
+
+        let custom_claims = serde_json::to_string(&token_claims.identity).unwrap_or_default();
+        
+        // Extract iss and aud from claims JSON
+        let _issuer = claims_json.get("iss")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "auth_service".to_string());
+        
+        let _audience = claims_json.get("aud")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "auth_service".to_string());
+
+        let jwt_claims = JwtClaims {
+            sub: service_id,
+            custom_claims,
+            iat,
+            exp,
+            nbf: None,
+            scope: None,
+            token_type: token_claims.token_type.clone(),
+            session_id: None,
+        };
+
+        let header = Header::new(self.algorithm);
+        
+        match encode(&header, &jwt_claims, encoding_key) {
+            Ok(token_value) => Token::new(token_value),
+            Err(_) => Token::new(""),
+        }
+    }
+
+    fn validate_service_token(&self, token: &Token) -> Result<String, ()> {
+        let token_str = token.value();
+        
+        if token_str.is_empty() {
+            return Err(());
+        }
+
+        // Use service token key if configured, otherwise fall back to main key
+        let decoding_key = self.service_decoding_key.as_ref()
+            .unwrap_or(&self.decoding_key);
+        
+        let mut validation = self.create_validation();
+        // Don't validate audience/issuer for service tokens by default to allow flexibility
+        validation.validate_aud = false;
+        
+        match decode::<JwtClaims>(token_str, decoding_key, &validation) {
+            Ok(token_data) => {
+                let claims = token_data.claims;
+                
+                // Validate that this is actually a service token
+                let token_type = claims.token_type.as_deref();
+                if token_type != Some("service") {
+                    // Token is valid but not a service token
+                    return Err(());
+                }
+                
+                // Build claims JSON including token type and timestamps
+                let mut claims_map: serde_json::Map<String, serde_json::Value> = 
+                    serde_json::from_str(&claims.custom_claims).unwrap_or_default();
+                
+                // Add token type
+                claims_map.insert("type".to_string(), serde_json::Value::String("service".to_string()));
+                
+                // Add service_id from sub
+                if !claims.sub.is_empty() {
+                    claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
+                }
+                
+                // Add expiration timestamp
+                claims_map.insert("exp".to_string(), serde_json::Value::Number(claims.exp.into()));
+                
+                // Add issued-at timestamp
+                claims_map.insert("iat".to_string(), serde_json::Value::Number(claims.iat.into()));
                 
                 let claims_json = serde_json::to_string(&claims_map).unwrap_or_default();
                 Ok(claims_json)

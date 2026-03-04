@@ -12,11 +12,17 @@ impl TokenService for MockTokenService {
     fn issue_refresh_token(&self, subject: &str, _claims: &str) -> Token {
         Token::new(format!("refresh_{}", subject))
     }
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(format!("service_{}", subject))
+    }
     fn validate_access_token(&self, token: &Token) -> Result<String, ()> {
         if token.value().starts_with("access_") { Ok("claims".to_string()) } else { Err(()) }
     }
     fn validate_refresh_token(&self, token: &Token) -> Result<String, ()> {
         if token.value().starts_with("refresh_") { Ok("claims".to_string()) } else { Err(()) }
+    }
+    fn validate_service_token(&self, token: &Token) -> Result<String, ()> {
+        if token.value().starts_with("service_") { Ok("claims".to_string()) } else { Err(()) }
     }
 }
 

@@ -103,6 +103,10 @@ impl TokenService for MockTokenService {
     fn issue_refresh_token(&self, user_id: &str, _claims: &str) -> Token {
         Token::new(format!("refresh_{}", user_id))
     }
+
+    fn issue_service_token(&self, subject: &str, _claims: &str) -> Token {
+        Token::new(format!("service_{}", subject))
+    }
     
     fn validate_access_token(&self, _token: &Token) -> Result<String, ()> {
         Ok(r#"{"sub":"user123","type":"access"}"#.to_string())
@@ -110,6 +114,10 @@ impl TokenService for MockTokenService {
     
     fn validate_refresh_token(&self, _token: &Token) -> Result<String, ()> {
         Ok(r#"{"sub":"user123","type":"refresh"}"#.to_string())
+    }
+
+    fn validate_service_token(&self, _token: &Token) -> Result<String, ()> {
+        Ok(r#"{"sub":"service123","type":"service"}"#.to_string())
     }
 }
 
@@ -131,6 +139,15 @@ impl ServiceRegistry for MockServiceRegistry {
     fn is_service_active(&self, _service_name: &str) -> bool {
         true
     }
+    
+    fn validate_credentials(
+        &self, 
+        _service_id: &str, 
+        _service_secret: &str,
+        _password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
+    ) -> Option<String> {
+        None
+    }
 }
 
 // ============================================================================
@@ -149,12 +166,14 @@ fn test_app_state_creation() {
         3600,      // access_token_ttl_seconds
         7,         // refresh_token_ttl_days
         true,      // rotate_refresh_tokens
+        3600,      // service_token_ttl_seconds
     );
     
     // Verify the state was created successfully
     assert_eq!(state.access_token_ttl_seconds, 3600);
     assert_eq!(state.refresh_token_ttl_days, 7);
     assert!(state.rotate_refresh_tokens);
+    assert_eq!(state.service_token_ttl_seconds, 3600);
 }
 
 #[test]
@@ -169,6 +188,7 @@ fn test_app_state_clone() {
         3600,
         7,
         true,
+        3600,
     );
     
     // Clone should work since all fields are Arc or Copy types
@@ -177,6 +197,7 @@ fn test_app_state_clone() {
     assert_eq!(cloned.access_token_ttl_seconds, state.access_token_ttl_seconds);
     assert_eq!(cloned.refresh_token_ttl_days, state.refresh_token_ttl_days);
     assert_eq!(cloned.rotate_refresh_tokens, state.rotate_refresh_tokens);
+    assert_eq!(cloned.service_token_ttl_seconds, state.service_token_ttl_seconds);
 }
 
 #[test]
@@ -192,11 +213,13 @@ fn test_app_state_default_token_ttls() {
         900,   // 15 minutes
         1,     // 1 day
         false,
+        1800,  // 30 minutes
     );
     
     assert_eq!(short_lived.access_token_ttl_seconds, 900);
     assert_eq!(short_lived.refresh_token_ttl_days, 1);
     assert!(!short_lived.rotate_refresh_tokens);
+    assert_eq!(short_lived.service_token_ttl_seconds, 1800);
 }
 
 #[test]
@@ -212,9 +235,11 @@ fn test_app_state_long_lived_tokens() {
         86400, // 1 day
         30,    // 30 days
         true,
+        7200,  // 2 hours
     );
     
     assert_eq!(long_lived.access_token_ttl_seconds, 86400);
     assert_eq!(long_lived.refresh_token_ttl_days, 30);
     assert!(long_lived.rotate_refresh_tokens);
+    assert_eq!(long_lived.service_token_ttl_seconds, 7200);
 }

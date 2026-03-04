@@ -22,7 +22,7 @@ pub mod http_error;
 pub mod error_response;
 
 pub use http_error::{
-    HttpError, ValidationError, UnauthorizedError, ConflictError, NotFoundError, LockedError, InternalError,
+    HttpError, ValidationError, UnauthorizedError, ConflictError, NotFoundError, LockedError, InternalError, ServiceUnauthorizedError
 };
 pub use error_response::ErrorResponse;
 

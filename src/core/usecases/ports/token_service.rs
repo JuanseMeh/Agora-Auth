@@ -14,9 +14,15 @@ pub trait TokenService {
 	/// Issue a new refresh token for a subject.
 	fn issue_refresh_token(&self, subject: &str, claims: &str) -> Token;
 
+	/// Issue a new service token for service-to-service authentication.
+	fn issue_service_token(&self, subject: &str, claims: &str) -> Token;
+
 	/// Validate an access token and return claims if valid.
 	fn validate_access_token(&self, token: &Token) -> Result<String, ()>;
 
 	/// Validate a refresh token and return claims if valid.
 	fn validate_refresh_token(&self, token: &Token) -> Result<String, ()>;
+
+	/// Validate a service token and return claims if valid.
+	fn validate_service_token(&self, token: &Token) -> Result<String, ()>;
 }

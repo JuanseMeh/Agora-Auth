@@ -53,8 +53,11 @@ impl ErrorResponse {
         match error {
             HttpError::Validation(e) => Self::validation(e),
             HttpError::Unauthorized(e) => Self::unauthorized(e),
+            HttpError::ServiceUnauthorized(e) => Self::service_unauthorized(e),
+            HttpError::Forbidden(e) => Self::forbidden(e),
             HttpError::Conflict(e) => Self::conflict(e),
             HttpError::NotFound(e) => Self::not_found(e),
+            HttpError::IdentityNotFound(e) => Self::identity_not_found(e),
             HttpError::Locked(e) => Self::locked(e),
             HttpError::Internal(e) => Self::internal(e),
         }
@@ -81,6 +84,48 @@ impl ErrorResponse {
             code: "UNAUTHORIZED".to_string(),
             message: error.to_string(),
             details: None,
+        }
+    }
+
+    /// Create a service unauthorized error response (401)
+    fn service_unauthorized(error: &ServiceUnauthorizedError) -> Self {
+        Self {
+            status: 401,
+            code: "SERVICE_UNAUTHORIZED".to_string(),
+            message: error.to_string(),
+            details: error.service_id.as_ref().map(|id| ErrorDetails {
+                field: None,
+                resource_type: Some("service".to_string()),
+                resource_id: Some(id.clone()),
+            }),
+        }
+    }
+
+    /// Create a forbidden error response (403)
+    fn forbidden(error: &ForbiddenError) -> Self {
+        Self {
+            status: 403,
+            code: "FORBIDDEN".to_string(),
+            message: error.to_string(),
+            details: error.required_permission.as_ref().map(|perm| ErrorDetails {
+                field: None,
+                resource_type: Some("permission".to_string()),
+                resource_id: Some(perm.clone()),
+            }),
+        }
+    }
+
+    /// Create an identity not found error response (404)
+    fn identity_not_found(error: &IdentityNotFoundError) -> Self {
+        Self {
+            status: 404,
+            code: "IDENTITY_NOT_FOUND".to_string(),
+            message: error.to_string(),
+            details: Some(ErrorDetails {
+                field: None,
+                resource_type: Some("identity".to_string()),
+                resource_id: Some(error.user_id.clone()),
+            }),
         }
     }
 
