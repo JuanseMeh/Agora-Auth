@@ -20,12 +20,24 @@ async fn inject_service_registry(
     next.run(request).await
 }
 
-/// Protected internal routes (require X-Service-Key authentication)
+/// Layer to inject token service into request extensions
+async fn inject_token_service(
+    State(state): State<AppState>,
+    mut request: Request,
+    next: Next,
+) -> Response {
+    request.extensions_mut().insert(state.token_service.clone());
+    next.run(request).await
+}
+
+/// Protected internal routes (require service JWT authentication)
 pub fn protected_internal_routes(state: AppState) -> Router<AppState> {
     Router::new()
         .route("/credentials", post(handlers::create_credential))
         .route("/token/issue", post(handlers::issue_session_tokens))
-        .layer(axum_middleware::from_fn(middleware::service_auth))
+        // Service JWT auth - validates Bearer token with typ:service claim
+        .layer(axum_middleware::from_fn(middleware::service_jwt_auth))
+        .layer(axum_middleware::from_fn_with_state(state.clone(), inject_token_service))
         .layer(axum_middleware::from_fn_with_state(state, inject_service_registry))
 }
 
