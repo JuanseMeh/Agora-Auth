@@ -4,7 +4,6 @@ use axum::{
     extract::Request,
     middleware::Next,
     response::{IntoResponse, Response},
-    http::StatusCode,
 };
 use std::sync::Arc;
 use crate::core::usecases::ports::ServiceRegistry;
@@ -46,10 +45,10 @@ pub async fn service_auth(
     {
         Some(key) if !key.is_empty() => key,
         _ => {
-            return Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body(axum::body::Body::empty())
-                .unwrap();
+            let error = HttpError::ServiceUnauthorized(
+                ServiceUnauthorizedError::new("Missing or empty X-Service-Key header")
+            );
+            return error.into_response();
         }
     };
 
@@ -60,10 +59,8 @@ pub async fn service_auth(
     {
         Some(reg) => reg,
         None => {
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(axum::body::Body::empty())
-                .unwrap();
+            let error = HttpError::Internal(InternalError::new("Service registry not available"));
+            return error.into_response();
         }
     };
 
@@ -71,16 +68,18 @@ pub async fn service_auth(
     let service_name = match registry.validate_api_key(api_key) {
         Some(name) => name,
         None => {
-            return Response::builder()
-                .status(StatusCode::UNAUTHORIZED)
-                .body(axum::body::Body::empty())
-                .unwrap();
+            let error = HttpError::ServiceUnauthorized(
+                ServiceUnauthorizedError::new("Invalid or unregistered service API key")
+            );
+            return error.into_response();
         }
     };
 
     // Check if service is active
     if !registry.is_service_active(&service_name) {
-        let error = HttpError::ServiceUnauthorized(ServiceUnauthorizedError::new("Service is not active"));
+        let error = HttpError::ServiceUnauthorized(
+            ServiceUnauthorizedError::with_service_id("Service is not active", &service_name)
+        );
         return error.into_response();
     }
 
