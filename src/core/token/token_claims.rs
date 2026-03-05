@@ -3,107 +3,114 @@
 /// `TokenClaims` is a data-only type that projects identity information
 /// and temporal validity bounds suitable for embedding in a token.
 ///
-/// # Responsibility
-///
-/// This type answers the question: "What identity and temporal assertions
-/// does this token make?" It is intentionally immutable and contains no
-/// business logic — it is purely an identity projection.
-///
 /// # Design Principles
 ///
 /// - **Data-only**: No methods that compute or perform authorization checks
 /// - **Immutable**: All fields are public and fixed after construction
-/// - **Domain-driven**: Uses domain types like `IdentityClaims` and `TokenLifetime`
 /// - **Transport-safe**: Can be safely serialized without exposing secrets
+/// - **JWT Standard Compliant**: Uses i64 timestamps (UNIX epoch)
 ///
-/// # Non-Responsibility
+/// # Target JWT Structure
 ///
-/// This type does NOT:
-/// - Encode permissions or scopes
-/// - Encode business rules
-/// - Imply authorization sufficiency
-/// - Define how claims are serialized
+/// ```json
+/// {
+///   "sub": "user_uuid",
+///   "sid": "session_uuid",
+///   "aud": ["auth_service"],
+///   "iat": 1772712911,
+///   "exp": 1772716511,
+///   "nbf": 1772712911,
+///   "token_type": "access",
+///   "scope": ["read", "write"]
+/// }
+/// ```
 
-use crate::core::identity::IdentityClaims;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TokenClaims {
-    /// Identity context: user and workspace identifiers.
-    pub identity: IdentityClaims,
+    /// Subject (user identifier) - maps to JWT "sub" claim
+    pub sub: String,
 
-    /// When the token was issued (as RFC3339 timestamp).
-    /// This is used to detect forged or replayed tokens.
-    pub issued_at: String,
+    /// Session ID for revocation/tracking - maps to JWT "sid" claim
+    pub sid: Option<String>,
 
-    /// When the token expires (as RFC3339 timestamp).
-    /// After this time, the token is no longer valid.
-    pub expires_at: String,
+    /// Audience (intended service(s)) - maps to JWT "aud" claim
+    pub aud: Option<Vec<String>>,
 
-    /// Optional "not before" time (as RFC3339 timestamp).
-    /// If present, the token is not valid before this time.
-    pub not_before: Option<String>,
+    /// Issued at timestamp (Unix epoch seconds) - maps to JWT "iat" claim
+    pub iat: i64,
 
-    /// Optional list of scopes or capabilities this token grants.
-    ///
-    /// **Important**: Scopes are context data, not authorization rules.
-    /// Authorization decisions MUST NOT be made solely from token scopes.
-    /// Scopes indicate what the token claims to grant; enforcement happens elsewhere.
-    pub scopes: Option<Vec<String>>,
+    /// Expiration timestamp (Unix epoch seconds) - maps to JWT "exp" claim
+    pub exp: i64,
 
-    /// Token type: "access" or "refresh"
-    /// This is used to distinguish between access and refresh tokens.
-    pub token_type: Option<String>,
+    /// Not before timestamp (Unix epoch seconds) - maps to JWT "nbf" claim
+    pub nbf: Option<i64>,
+
+    /// Scopes/permissions - maps to JWT "scope" claim (space-separated string)
+    /// Always a vector, never null - empty vector serializes to empty string
+    #[serde(default)]
+    pub scope: Vec<String>,
+
+    /// Token type: "access", "refresh", or "service" - maps to JWT "token_type" claim
+    pub token_type: String,
 }
 
 impl TokenClaims {
     /// Create a new `TokenClaims` with required identity and temporal bounds.
     pub fn new(
-        identity: IdentityClaims,
-        issued_at: impl Into<String>,
-        expires_at: impl Into<String>,
+        sub: String,
+        iat: i64,
+        exp: i64,
+        token_type: String,
     ) -> Self {
         Self {
-            identity,
-            issued_at: issued_at.into(),
-            expires_at: expires_at.into(),
-            not_before: None,
-            scopes: None,
-            token_type: None,
+            sub,
+            sid: None,
+            aud: None,
+            iat,
+            exp,
+            nbf: None,
+            scope: vec![],
+            token_type,
         }
     }
 
-    /// Set an optional "not before" time.
-    pub fn with_not_before(mut self, not_before: impl Into<String>) -> Self {
-        self.not_before = Some(not_before.into());
+    /// Set session ID for revocation tracking.
+    pub fn with_sid(mut self, sid: impl Into<String>) -> Self {
+        self.sid = Some(sid.into());
         self
     }
 
-    /// Set optional scopes.
+    /// Set audience for the token.
+    pub fn with_audience(mut self, audience: Vec<String>) -> Self {
+        self.aud = Some(audience);
+        self
+    }
+
+    /// Set "not before" timestamp.
+    pub fn with_not_before(mut self, nbf: i64) -> Self {
+        self.nbf = Some(nbf);
+        self
+    }
+
+    /// Set scopes/permissions.
     pub fn with_scopes(mut self, scopes: Vec<String>) -> Self {
-        self.scopes = Some(scopes);
+        self.scope = scopes;
         self
     }
 
-    /// Set optional token type.
-    pub fn with_token_type(mut self, token_type: impl Into<String>) -> Self {
-        self.token_type = Some(token_type.into());
-        self
-    }
-
-    /// Check if this claims object represents any identity.
-    ///
-    /// Returns `true` if at least one identity field (user_id or workspace_id) is present.
+    /// Check if this claims object has a valid subject.
     pub fn has_identity(&self) -> bool {
-        !self.identity.is_empty()
+        !self.sub.is_empty()
     }
 
     /// Check if scopes are present.
     pub fn has_scopes(&self) -> bool {
-        self.scopes.as_ref().map(|s| !s.is_empty()).unwrap_or(false)
+        !self.scope.is_empty()
     }
 
-    /// Get scopes as a slice if present, otherwise an empty slice.
+    /// Get scopes as a slice.
     pub fn scopes(&self) -> &[String] {
-        self.scopes.as_deref().unwrap_or(&[])
+        &self.scope
     }
 }
+
