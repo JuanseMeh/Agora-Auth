@@ -50,10 +50,6 @@ impl IdentityRepository for MockIdentityRepository {
         Box::pin(async move { identities.get(&id).cloned() })
     }
 
-    fn find_workspace_by_id(&self, _id: &str) -> BoxFuture<'_, Option<crate::core::identity::WorkspaceIdentity>> {
-        Box::pin(async { None })
-    }
-
     fn create(
         &self,
         _user_id: &uuid::Uuid,
