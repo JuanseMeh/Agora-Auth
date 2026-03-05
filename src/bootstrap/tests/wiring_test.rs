@@ -1,6 +1,6 @@
 //! Tests for the wiring module.
 
-use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, SecurityConfig, ServerConfig, ServiceAuthConfig};
+use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, SecurityConfig, ServerConfig, ServiceAuthConfig, TokenAlgorithm};
 use crate::bootstrap::wiring::{initialize_components, AppComponents};
 
 /// Test-specific initialization with test database.
@@ -20,7 +20,10 @@ pub async fn initialize_test_components() -> anyhow::Result<AppComponents> {
             password_hash_memory_cost: 4096, // Low cost for fast tests
             password_hash_iterations: 1,
             password_hash_parallelism: 1,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLWhzMjU2".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 5,
             refresh_token_ttl_days: 1,
         },
@@ -32,7 +35,10 @@ pub async fn initialize_test_components() -> anyhow::Result<AppComponents> {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["test-service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1zZWNyZXQta2V5LXRoYXQtaXMtbG9uZy1lbm91Z2gtZm9yLWhzMjU2".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Test,
@@ -57,3 +63,4 @@ mod tests {
         }
     }
 }
+

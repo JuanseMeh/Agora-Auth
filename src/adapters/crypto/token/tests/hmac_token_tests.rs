@@ -13,28 +13,20 @@ fn create_test_service() -> HmacTokenService {
 #[test]
 fn test_token_encoding_diagnostics() {
     use crate::core::token::TokenClaims;
-    use crate::core::identity::IdentityClaims;
     
     let key = HmacKey::generate().expect("Should generate key");
     let service = HmacTokenService::from_secret_key(&key.as_bytes())
         .expect("Should create service with valid key");
     
-    let identity = IdentityClaims {
-        user_id: Some("user123".to_string()),
-        workspace_id: Some("ws456".to_string()),
-    };
-    
     let now = chrono::Utc::now();
     let expires = now + chrono::Duration::hours(1);
     
-    let claims = TokenClaims {
-        identity,
-        issued_at: now.to_rfc3339(),
-        expires_at: expires.to_rfc3339(),
-        not_before: None,
-        scopes: None,
-        token_type: Some("access".to_string()),
-    };
+    let claims = TokenClaims::new(
+        "user123".to_string(),
+        now.timestamp(),
+        expires.timestamp(),
+        "access".to_string(),
+    );
     
     // Try to encode directly to see the error
     let result = service.encode_token(&claims);

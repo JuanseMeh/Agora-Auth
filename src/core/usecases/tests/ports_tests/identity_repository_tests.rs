@@ -18,9 +18,7 @@ impl IdentityRepository for MockIdentityRepo {
             if id == "user123" { Some(UserIdentity::new(&id)) } else { None }
         })
     }
-    fn find_workspace_by_id(&self, _id: &str) -> BoxFuture<'_, Option<crate::core::identity::WorkspaceIdentity>> {
-        Box::pin(async move { None })
-    }
+
     fn create(
         &self,
         _user_id: &uuid::Uuid,

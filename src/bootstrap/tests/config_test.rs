@@ -1,6 +1,6 @@
 //! Tests for configuration management.
 
-use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, SecurityConfig, ServerConfig, ServiceAuthConfig};
+use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, SecurityConfig, ServerConfig, ServiceAuthConfig, TokenAlgorithm};
 
 #[test]
 fn test_deployment_mode_display() {
@@ -55,13 +55,17 @@ fn test_crypto_config_default() {
         password_hash_memory_cost: 65536,
         password_hash_iterations: 3,
         password_hash_parallelism: 4,
+        token_algorithm: TokenAlgorithm::Hmac,
         token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVub3VnaC1mb3ItaHMyNTY=".to_string(),
+        eddsa_private_key: None,
+        eddsa_public_key: None,
         access_token_ttl_mins: 15,
         refresh_token_ttl_days: 7,
     };
     assert_eq!(config.password_hash_memory_cost, 65536);
     assert_eq!(config.password_hash_iterations, 3);
     assert_eq!(config.password_hash_parallelism, 4);
+    assert_eq!(config.token_algorithm, TokenAlgorithm::Hmac);
     assert_eq!(config.access_token_ttl_mins, 15);
     assert_eq!(config.refresh_token_ttl_days, 7);
 }
@@ -83,12 +87,16 @@ fn test_service_auth_config() {
     let config = ServiceAuthConfig {
         valid_service_keys: vec!["key1".to_string(), "key2".to_string()],
         service_credentials: vec![],
+        service_token_algorithm: TokenAlgorithm::Hmac,
         service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+        eddsa_service_private_key: None,
+        eddsa_service_public_key: None,
         service_token_ttl_mins: 60,
     };
     assert_eq!(config.valid_service_keys.len(), 2);
     assert_eq!(config.valid_service_keys[0], "key1");
     assert_eq!(config.valid_service_keys[1], "key2");
+    assert_eq!(config.service_token_algorithm, TokenAlgorithm::Hmac);
 }
 
 #[test]
@@ -107,7 +115,10 @@ fn test_auth_config_validation_valid() {
             password_hash_memory_cost: 65536,
             password_hash_iterations: 3,
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 15,
             refresh_token_ttl_days: 7,
         },
@@ -119,7 +130,10 @@ fn test_auth_config_validation_valid() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
@@ -145,7 +159,10 @@ fn test_auth_config_validation_invalid_ttl() {
             password_hash_memory_cost: 65536,
             password_hash_iterations: 3,
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 10080, // 7 days - longer than refresh token
             refresh_token_ttl_days: 7,
         },
@@ -157,7 +174,10 @@ fn test_auth_config_validation_invalid_ttl() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
@@ -186,7 +206,10 @@ fn test_auth_config_validation_short_signing_key() {
             password_hash_memory_cost: 65536,
             password_hash_iterations: 3,
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "c2hvcnQta2V5".to_string(), // "short-key" - too short
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 15,
             refresh_token_ttl_days: 7,
         },
@@ -198,7 +221,10 @@ fn test_auth_config_validation_short_signing_key() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
@@ -227,7 +253,10 @@ fn test_auth_config_validation_zero_max_attempts() {
             password_hash_memory_cost: 65536,
             password_hash_iterations: 3,
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 15,
             refresh_token_ttl_days: 7,
         },
@@ -239,7 +268,10 @@ fn test_auth_config_validation_zero_max_attempts() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
@@ -268,7 +300,10 @@ fn test_auth_config_validation_production_requirements() {
             password_hash_memory_cost: 4096, // Too low for production
             password_hash_iterations: 2,      // Too low for production
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 15,
             refresh_token_ttl_days: 7,
         },
@@ -280,7 +315,10 @@ fn test_auth_config_validation_production_requirements() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
@@ -309,7 +347,10 @@ fn test_auth_config_validation_development_allows_lower_security() {
             password_hash_memory_cost: 4096, // Lower is OK for development
             password_hash_iterations: 2,      // Lower is OK for development
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 15,
             refresh_token_ttl_days: 7,
         },
@@ -321,7 +362,10 @@ fn test_auth_config_validation_development_allows_lower_security() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Development,
@@ -347,7 +391,10 @@ fn test_auth_config_validation_empty_service_keys() {
             password_hash_memory_cost: 65536,
             password_hash_iterations: 3,
             password_hash_parallelism: 4,
+            token_algorithm: TokenAlgorithm::Hmac,
             token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_private_key: None,
+            eddsa_public_key: None,
             access_token_ttl_mins: 15,
             refresh_token_ttl_days: 7,
         },
@@ -359,7 +406,10 @@ fn test_auth_config_validation_empty_service_keys() {
         service_auth: ServiceAuthConfig {
             valid_service_keys: vec![], // Empty - should fail
             service_credentials: vec![],
+            service_token_algorithm: TokenAlgorithm::Hmac,
             service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            eddsa_service_private_key: None,
+            eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
         mode: DeploymentMode::Production,
@@ -370,5 +420,11 @@ fn test_auth_config_validation_empty_service_keys() {
     assert!(result.is_err());
     let err_msg = format!("{}", result.unwrap_err());
     assert!(err_msg.contains("service API key"));
+}
+
+#[test]
+fn test_token_algorithm_display() {
+    assert_eq!(format!("{}", TokenAlgorithm::EdDSA), "EdDSA");
+    assert_eq!(format!("{}", TokenAlgorithm::Hmac), "Hmac");
 }
 

@@ -7,7 +7,7 @@
 use crate::core::token::Token;
 
 /// Contract for token service.
-pub trait TokenService {
+pub trait TokenService: Send + Sync {
 	/// Issue a new access token for a subject (user id, claims, etc.).
 	fn issue_access_token(&self, subject: &str, claims: &str) -> Token;
 

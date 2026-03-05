@@ -165,14 +165,6 @@ impl IdentityRepository for IdentityRepositorySql {
         .boxed()
     }
 
-    fn find_workspace_by_id(&self, _id: &str) -> futures::future::BoxFuture<'_, Option<crate::core::identity::WorkspaceIdentity>> {
-        async move {
-            // TODO: Implement workspace lookup
-            None
-        }
-        .boxed()
-    }
-
     fn create(&self, user_id: &uuid::Uuid, identifier: &str, password_hash: &str, _salt: &str, _algorithm: &str, _iterations: u32) -> futures::future::BoxFuture<'_, Result<(), String>> {
         let user_id_str = user_id.to_string();
         let identifier = identifier.to_string();
