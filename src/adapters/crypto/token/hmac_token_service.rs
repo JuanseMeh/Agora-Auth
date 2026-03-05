@@ -9,6 +9,7 @@
 //! - **Deterministic errors**: All failures map to specific error types
 //! - **No secret leakage**: Keys are never logged or exposed in errors
 //! - **Algorithm enforcement**: Only HS256 is supported
+//! - **JWT Standard Compliant**: Uses i64 timestamps, flattened claims
 
 use crate::adapters::crypto::error::JwtError;
 use crate::adapters::crypto::token::HmacKey;
@@ -16,32 +17,6 @@ use crate::core::token::{Token, TokenClaims};
 use crate::core::usecases::ports::TokenService;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
-
-/// JWT claims structure for serialization.
-///
-/// This internal struct maps our domain TokenClaims to the format
-/// expected by the jsonwebtoken library.
-#[derive(Debug, Serialize, Deserialize)]
-struct JwtClaims {
-    /// Subject (user identifier)
-    sub: String,
-    /// Custom claims data (JSON string)
-    custom_claims: String,
-    /// Issued at timestamp (Unix timestamp)
-    iat: i64,
-    /// Expiration timestamp (Unix timestamp)
-    exp: i64,
-    /// Optional not-before timestamp
-    nbf: Option<i64>,
-    /// Optional scopes
-    scope: Option<String>,
-    /// Token type: "access" or "refresh"
-    #[serde(rename = "type")]
-    token_type: Option<String>,
-    /// Optional session ID
-    #[serde(rename = "sid")]
-    session_id: Option<String>,
-}
 
 /// HMAC-SHA256-based token service implementation.
 ///
@@ -60,14 +35,6 @@ pub struct HmacTokenService {
 
 impl HmacTokenService {
     /// Create a new HMAC token service from a key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - An HmacKey containing the symmetric key
-    ///
-    /// # Errors
-    ///
-    /// Returns `JwtError::InvalidKey` if the key is not valid.
     pub fn from_key(key: &HmacKey) -> Result<Self, JwtError> {
         Ok(Self {
             encoding_key: key.encoding_key().clone(),
@@ -81,17 +48,6 @@ impl HmacTokenService {
     }
 
     /// Create a new HMAC token service with the given raw key bytes.
-    ///
-    /// This is a convenience method that creates a key internally.
-    /// For production use, prefer `from_key` with a properly managed key.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - 32-byte HMAC-SHA256 key
-    ///
-    /// # Errors
-    ///
-    /// Returns `JwtError::InvalidKey` if the key is not valid HMAC material.
     pub fn from_secret_key(key: &[u8]) -> Result<Self, JwtError> {
         let hmac_key = HmacKey::from_bytes(key)
             .map_err(|e| JwtError::invalid_key(e))?;
@@ -100,14 +56,6 @@ impl HmacTokenService {
     }
 
     /// Set the service token key for signing/validating service-to-service tokens.
-    ///
-    /// # Arguments
-    ///
-    /// * `key` - 32-byte HMAC-SHA256 key for service tokens
-    ///
-    /// # Errors
-    ///
-    /// Returns `JwtError::InvalidKey` if the key is not valid HMAC material.
     pub fn with_service_token_key(mut self, key: &[u8]) -> Result<Self, JwtError> {
         let hmac_key = HmacKey::from_bytes(key)
             .map_err(|e| JwtError::invalid_key(e))?;
@@ -145,39 +93,41 @@ impl HmacTokenService {
         validation
     }
 
-    /// Encode claims into a JWT token.
+    /// Encode TokenClaims into a JWT token.
     pub fn encode_token(&self, claims: &TokenClaims) -> Result<String, JwtError> {
-        // Parse timestamps
-        let exp = chrono::DateTime::parse_from_rfc3339(&claims.expires_at)
-            .map_err(|e| JwtError::encoding(format!("Invalid expiration timestamp: {}", e)))?
-            .timestamp();
+        // Create a serialization struct that matches JWT format
+        #[derive(Serialize)]
+        struct JwtClaims<'a> {
+            sub: &'a str,
+            sid: Option<&'a str>,
+            aud: Option<Vec<&'a str>>,
+            iat: i64,
+            exp: i64,
+            nbf: Option<i64>,
+            scope: Option<Vec<&'a str>>,
+            #[serde(rename = "token_type")]
+            token_type: &'a str,
+        }
 
-        let iat = chrono::DateTime::parse_from_rfc3339(&claims.issued_at)
-            .map_err(|e| JwtError::encoding(format!("Invalid issued-at timestamp: {}", e)))?
-            .timestamp();
+        let audience = claims.aud.as_ref().map(|aud| {
+            aud.iter().map(|s| s.as_str()).collect::<Vec<&str>>()
+        });
 
-        let nbf = claims.not_before.as_ref().map(|nbf| {
-            chrono::DateTime::parse_from_rfc3339(nbf)
-                .map(|dt| dt.timestamp())
-                .ok()
-        }).flatten();
-
-        // Serialize custom claims (identity info)
-        let custom_claims = serde_json::to_string(&claims.identity)
-            .map_err(|e| JwtError::encoding(format!("Failed to serialize claims: {}", e)))?;
-
-        // Build scope string if present
-        let scope = claims.scopes.as_ref().map(|scopes| scopes.join(" "));
+        let scope = if claims.scope.is_empty() {
+            None
+        } else {
+            Some(claims.scope.iter().map(|s| s.as_str()).collect::<Vec<&str>>())
+        };
 
         let jwt_claims = JwtClaims {
-            sub: claims.identity.user_id.clone().unwrap_or_default(),
-            custom_claims,
-            iat,
-            exp,
-            nbf,
+            sub: &claims.sub,
+            sid: claims.sid.as_deref(),
+            aud: audience,
+            iat: claims.iat,
+            exp: claims.exp,
+            nbf: claims.nbf,
             scope,
-            token_type: claims.token_type.clone(),
-            session_id: None, // Will be set in issue_access_token/issue_refresh_token
+            token_type: &claims.token_type,
         };
 
         let header = Header::new(self.algorithm);
@@ -187,10 +137,25 @@ impl HmacTokenService {
     }
 
     /// Decode and validate a JWT token.
-    fn decode_token(&self, token: &str) -> Result<JwtClaims, JwtError> {
+    fn decode_token(&self, token: &str) -> Result<TokenClaims, JwtError> {
         let validation = self.create_validation();
 
-        let token_data = decode::<JwtClaims>(token, &self.decoding_key, &validation)
+        // First decode to get raw claims, then map to our struct
+        #[derive(Deserialize)]
+        struct RawJwtClaims {
+            sub: String,
+            #[serde(rename = "sid")]
+            session_id: Option<String>,
+            aud: Option<Vec<String>>,
+            iat: i64,
+            exp: i64,
+            nbf: Option<i64>,
+            scope: Option<Vec<String>>,
+            #[serde(rename = "token_type")]
+            token_type: String,
+        }
+
+        let token_data = decode::<RawJwtClaims>(token, &self.decoding_key, &validation)
             .map_err(|e| match e.kind() {
                 jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
                     JwtError::expired("Token has expired")
@@ -210,7 +175,21 @@ impl HmacTokenService {
                 _ => JwtError::decoding(format!("Token decoding failed: {}", e)),
             })?;
 
-        Ok(token_data.claims)
+        let raw = token_data.claims;
+
+        // Scope is now an array
+        let scope = raw.scope.unwrap_or_default();
+
+        Ok(TokenClaims {
+            sub: raw.sub,
+            sid: raw.session_id,
+            aud: raw.aud,
+            iat: raw.iat,
+            exp: raw.exp,
+            nbf: raw.nbf,
+            scope,
+            token_type: raw.token_type,
+        })
     }
 }
 
@@ -222,116 +201,57 @@ impl TokenService for HmacTokenService {
         
         let user_id = claims_json.get("sub")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .unwrap_or("")
+            .to_string();
         
         let session_id = claims_json.get("sid")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        
-        let identity = crate::core::identity::IdentityClaims {
-            user_id,
-            workspace_id: None, // Not included in claims
-        };
 
         let now = chrono::Utc::now();
         let expires = now + chrono::Duration::hours(1); // 1 hour for access tokens
 
-        let token_claims = TokenClaims {
-            identity,
-            issued_at: now.to_rfc3339(),
-            expires_at: expires.to_rfc3339(),
-            not_before: None,
-            scopes: None,
-            token_type: Some("access".to_string()),
-        };
+        let token_claims = TokenClaims::new(
+            user_id,
+            now.timestamp(),
+            expires.timestamp(),
+            "access".to_string(),
+        )
+        .with_sid(session_id.unwrap_or_default());
 
-        // Encode token with session_id
-        let exp = chrono::DateTime::parse_from_rfc3339(&token_claims.expires_at)
-            .map(|dt| dt.timestamp())
-            .unwrap_or_else(|_| (now + chrono::Duration::hours(1)).timestamp());
-        
-        let iat = chrono::DateTime::parse_from_rfc3339(&token_claims.issued_at)
-            .map(|dt| dt.timestamp())
-            .unwrap_or_else(|_| now.timestamp());
-
-        let custom_claims = serde_json::to_string(&token_claims.identity).unwrap_or_default();
-        
-        let jwt_claims = JwtClaims {
-            sub: token_claims.identity.user_id.clone().unwrap_or_default(),
-            custom_claims,
-            iat,
-            exp,
-            nbf: None,
-            scope: None,
-            token_type: token_claims.token_type.clone(),
-            session_id,
-        };
-
-        let header = Header::new(self.algorithm);
-        
-        match encode(&header, &jwt_claims, &self.encoding_key) {
+        match self.encode_token(&token_claims) {
             Ok(token_value) => Token::new(token_value),
-            Err(_) => Token::new(""), // Return empty token on error (should not happen)
+            Err(_) => Token::new(""),
         }
     }
 
     fn issue_refresh_token(&self, _subject: &str, claims: &str) -> Token {
         // Parse the claims JSON to extract identity information
-        // The claims JSON has format: {"sub":"user_id","type":"refresh","exp":123456,"sid":"session_id"}
         let claims_json: serde_json::Value = serde_json::from_str(claims).unwrap_or_default();
         
         let user_id = claims_json.get("sub")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .unwrap_or("")
+            .to_string();
         
         let session_id = claims_json.get("sid")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
-        
-        let identity = crate::core::identity::IdentityClaims {
-            user_id,
-            workspace_id: None, // Not included in claims
-        };
 
         let now = chrono::Utc::now();
         let expires = now + chrono::Duration::days(7); // 7 days for refresh tokens
 
-        let token_claims = TokenClaims {
-            identity,
-            issued_at: now.to_rfc3339(),
-            expires_at: expires.to_rfc3339(),
-            not_before: None,
-            scopes: None,
-            token_type: Some("refresh".to_string()),
-        };
+        let token_claims = TokenClaims::new(
+            user_id,
+            now.timestamp(),
+            expires.timestamp(),
+            "refresh".to_string(),
+        )
+        .with_sid(session_id.unwrap_or_default());
 
-        // Encode token with session_id
-        let exp = chrono::DateTime::parse_from_rfc3339(&token_claims.expires_at)
-            .map(|dt| dt.timestamp())
-            .unwrap_or_else(|_| (now + chrono::Duration::days(7)).timestamp());
-        
-        let iat = chrono::DateTime::parse_from_rfc3339(&token_claims.issued_at)
-            .map(|dt| dt.timestamp())
-            .unwrap_or_else(|_| now.timestamp());
-
-        let custom_claims = serde_json::to_string(&token_claims.identity).unwrap_or_default();
-        
-        let jwt_claims = JwtClaims {
-            sub: token_claims.identity.user_id.clone().unwrap_or_default(),
-            custom_claims,
-            iat,
-            exp,
-            nbf: None,
-            scope: None,
-            token_type: token_claims.token_type.clone(),
-            session_id,
-        };
-
-        let header = Header::new(self.algorithm);
-        
-        match encode(&header, &jwt_claims, &self.encoding_key) {
+        match self.encode_token(&token_claims) {
             Ok(token_value) => Token::new(token_value),
-            Err(_) => Token::new(""), // Return empty token on error (should not happen)
+            Err(_) => Token::new(""),
         }
     }
 
@@ -344,29 +264,28 @@ impl TokenService for HmacTokenService {
 
         match self.decode_token(token_str) {
             Ok(claims) => {
-                // Build claims JSON including token type and timestamps
-                let mut claims_map: serde_json::Map<String, serde_json::Value> = 
-                    serde_json::from_str(&claims.custom_claims).unwrap_or_default();
+                // Build claims JSON for return
+                let mut claims_map = serde_json::Map::new();
                 
-                // Add token type if present
-                if let Some(token_type) = claims.token_type {
-                    claims_map.insert("type".to_string(), serde_json::Value::String(token_type));
-                }
-                
-                // Add user_id from sub if present (sub is the canonical source)
-                if !claims.sub.is_empty() {
-                    claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
-                }
-                
-                // Add expiration timestamp (required for validation)
+                claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
+                claims_map.insert("type".to_string(), serde_json::Value::String(claims.token_type));
                 claims_map.insert("exp".to_string(), serde_json::Value::Number(claims.exp.into()));
-                
-                // Add issued-at timestamp
                 claims_map.insert("iat".to_string(), serde_json::Value::Number(claims.iat.into()));
                 
-                // Add session_id if present
-                if let Some(session_id) = claims.session_id {
-                    claims_map.insert("sid".to_string(), serde_json::Value::String(session_id));
+                if let Some(sid) = claims.sid {
+                    claims_map.insert("sid".to_string(), serde_json::Value::String(sid));
+                }
+                
+                if let Some(aud) = claims.aud {
+                    claims_map.insert("aud".to_string(), serde_json::Value::Array(
+                        aud.into_iter().map(serde_json::Value::String).collect()
+                    ));
+                }
+                
+                if !claims.scope.is_empty() {
+                    claims_map.insert("scope".to_string(), serde_json::Value::Array(
+                        claims.scope.into_iter().map(serde_json::Value::String).collect()
+                    ));
                 }
                 
                 let claims_json = serde_json::to_string(&claims_map).unwrap_or_default();
@@ -386,33 +305,20 @@ impl TokenService for HmacTokenService {
         match self.decode_token(token_str) {
             Ok(claims) => {
                 // Validate that this is actually a refresh token
-                let token_type = claims.token_type.as_deref();
-                if token_type != Some("refresh") {
-                    // Token is valid but not a refresh token
+                if claims.token_type != "refresh" {
                     return Err(());
                 }
                 
-                // Build claims JSON including token type and timestamps
-                let mut claims_map: serde_json::Map<String, serde_json::Value> = 
-                    serde_json::from_str(&claims.custom_claims).unwrap_or_default();
+                // Build claims JSON for return
+                let mut claims_map = serde_json::Map::new();
                 
-                // Add token type
+                claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
                 claims_map.insert("type".to_string(), serde_json::Value::String("refresh".to_string()));
-                
-                // Add user_id from sub if present (sub is the canonical source)
-                if !claims.sub.is_empty() {
-                    claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
-                }
-                
-                // Add expiration timestamp (required for validation)
                 claims_map.insert("exp".to_string(), serde_json::Value::Number(claims.exp.into()));
-                
-                // Add issued-at timestamp
                 claims_map.insert("iat".to_string(), serde_json::Value::Number(claims.iat.into()));
                 
-                // Add session_id if present
-                if let Some(session_id) = claims.session_id {
-                    claims_map.insert("sid".to_string(), serde_json::Value::String(session_id));
+                if let Some(sid) = claims.sid {
+                    claims_map.insert("sid".to_string(), serde_json::Value::String(sid));
                 }
                 
                 let claims_json = serde_json::to_string(&claims_map).unwrap_or_default();
@@ -427,63 +333,61 @@ impl TokenService for HmacTokenService {
         let encoding_key = self.service_encoding_key.as_ref()
             .unwrap_or(&self.encoding_key);
         
-        // Parse the claims JSON to extract identity information
-        // Service token claims format: {"sub":"service_id","type":"service","exp":123456,"iss":"auth_service","aud":"auth_service"}
+        // Parse the claims JSON
         let claims_json: serde_json::Value = serde_json::from_str(claims).unwrap_or_default();
         
         let service_id = claims_json.get("sub")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| subject.to_string());
-        
-        let identity = crate::core::identity::IdentityClaims {
-            user_id: Some(service_id.clone()),
-            workspace_id: None,
-        };
+            .unwrap_or(subject)
+            .to_string();
 
         let now = chrono::Utc::now();
-        let expires = now + chrono::Duration::hours(1); // 1 hour default for service tokens
+        let expires = now + chrono::Duration::hours(1);
 
-        let token_claims = TokenClaims {
-            identity,
-            issued_at: now.to_rfc3339(),
-            expires_at: expires.to_rfc3339(),
-            not_before: None,
-            scopes: None,
-            token_type: Some("service".to_string()),
-        };
+        let mut token_claims = TokenClaims::new(
+            service_id,
+            now.timestamp(),
+            expires.timestamp(),
+            "service".to_string(),
+        );
 
-        // Encode token
-        let exp = chrono::DateTime::parse_from_rfc3339(&token_claims.expires_at)
-            .map(|dt| dt.timestamp())
-            .unwrap_or_else(|_| (now + chrono::Duration::hours(1)).timestamp());
-        
-        let iat = chrono::DateTime::parse_from_rfc3339(&token_claims.issued_at)
-            .map(|dt| dt.timestamp())
-            .unwrap_or_else(|_| now.timestamp());
+        // Add audience if provided
+        if let Some(aud_value) = claims_json.get("aud") {
+            if let Some(aud_str) = aud_value.as_str() {
+                token_claims = token_claims.with_audience(vec![aud_str.to_string()]);
+            }
+        }
 
-        let custom_claims = serde_json::to_string(&token_claims.identity).unwrap_or_default();
-        
-        // Extract iss and aud from claims JSON
-        let _issuer = claims_json.get("iss")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "auth_service".to_string());
-        
-        let _audience = claims_json.get("aud")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "auth_service".to_string());
+        // Encode with service key
+        #[derive(Serialize)]
+        struct JwtClaims<'a> {
+            sub: &'a str,
+            sid: Option<&'a str>,
+            aud: Option<Vec<&'a str>>,
+            iat: i64,
+            exp: i64,
+            nbf: Option<i64>,
+            scope: Option<Vec<&'a str>>,
+            #[serde(rename = "token_type")]
+            token_type: &'a str,
+        }
+
+        let audience = token_claims.aud.as_ref().map(|aud| {
+            aud.iter().map(|s| s.as_str()).collect()
+        });
+
+        // Service tokens have no scope by default
+        let _scope: Option<Vec<&str>> = None;
 
         let jwt_claims = JwtClaims {
-            sub: service_id,
-            custom_claims,
-            iat,
-            exp,
-            nbf: None,
+            sub: &token_claims.sub,
+            sid: token_claims.sid.as_deref(),
+            aud: audience,
+            iat: token_claims.iat,
+            exp: token_claims.exp,
+            nbf: token_claims.nbf,
             scope: None,
-            token_type: token_claims.token_type.clone(),
-            session_id: None,
+            token_type: &token_claims.token_type,
         };
 
         let header = Header::new(self.algorithm);
@@ -508,34 +412,36 @@ impl TokenService for HmacTokenService {
         let mut validation = self.create_validation();
         // Don't validate audience/issuer for service tokens by default to allow flexibility
         validation.validate_aud = false;
-        
-        match decode::<JwtClaims>(token_str, decoding_key, &validation) {
+
+        #[derive(Deserialize)]
+        struct RawJwtClaims {
+            sub: String,
+            #[serde(rename = "sid")]
+            _session_id: Option<String>,
+            _aud: Option<Vec<String>>,
+            iat: i64,
+            exp: i64,
+            _nbf: Option<i64>,
+            _scope: Option<String>,
+            #[serde(rename = "token_type")]
+            token_type: String,
+        }
+
+        match decode::<RawJwtClaims>(token_str, decoding_key, &validation) {
             Ok(token_data) => {
                 let claims = token_data.claims;
                 
                 // Validate that this is actually a service token
-                let token_type = claims.token_type.as_deref();
-                if token_type != Some("service") {
-                    // Token is valid but not a service token
+                if claims.token_type != "service" {
                     return Err(());
                 }
                 
-                // Build claims JSON including token type and timestamps
-                let mut claims_map: serde_json::Map<String, serde_json::Value> = 
-                    serde_json::from_str(&claims.custom_claims).unwrap_or_default();
+                // Build claims JSON for return
+                let mut claims_map = serde_json::Map::new();
                 
-                // Add token type
+                claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
                 claims_map.insert("type".to_string(), serde_json::Value::String("service".to_string()));
-                
-                // Add service_id from sub
-                if !claims.sub.is_empty() {
-                    claims_map.insert("sub".to_string(), serde_json::Value::String(claims.sub));
-                }
-                
-                // Add expiration timestamp
                 claims_map.insert("exp".to_string(), serde_json::Value::Number(claims.exp.into()));
-                
-                // Add issued-at timestamp
                 claims_map.insert("iat".to_string(), serde_json::Value::Number(claims.iat.into()));
                 
                 let claims_json = serde_json::to_string(&claims_map).unwrap_or_default();
