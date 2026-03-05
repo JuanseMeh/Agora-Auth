@@ -54,12 +54,27 @@ pub struct CryptoConfig {
     pub password_hash_iterations: u32,
     /// Argon2 parallelism factor
     pub password_hash_parallelism: u32,
-    /// JWT signing key (HS256 symmetric key)
+    /// JWT signing algorithm: "eddsa" or "hmac"
+    pub token_algorithm: TokenAlgorithm,
+    /// JWT signing key for HMAC (HS256 symmetric key)
     pub token_signing_key: String,
+    /// EdDSA private key (base64 encoded, 32 bytes)
+    pub eddsa_private_key: Option<String>,
+    /// EdDSA public key (base64 encoded, 32 bytes)
+    pub eddsa_public_key: Option<String>,
     /// Access token TTL in minutes
     pub access_token_ttl_mins: u64,
     /// Refresh token TTL in days
     pub refresh_token_ttl_days: u64,
+}
+
+/// JWT signing algorithm
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenAlgorithm {
+    /// EdDSA (Ed25519) - asymmetric
+    EdDSA,
+    /// HMAC-SHA256 - symmetric
+    Hmac,
 }
 
 /// Security policy configuration
@@ -81,8 +96,14 @@ pub struct ServiceAuthConfig {
     /// Service credentials: map of service_id -> hashed secret
     /// Format: service_id:hashed_secret (comma-separated)
     pub service_credentials: Vec<(String, String)>,
-    /// Service token signing key (base64 encoded)
+    /// Service token signing algorithm
+    pub service_token_algorithm: TokenAlgorithm,
+    /// Service token signing key for HMAC (base64 encoded)
     pub service_token_signing_key: String,
+    /// EdDSA service token private key (base64 encoded, 32 bytes)
+    pub eddsa_service_private_key: Option<String>,
+    /// EdDSA service token public key (base64 encoded, 32 bytes)
+    pub eddsa_service_public_key: Option<String>,
     /// Service token TTL in minutes
     pub service_token_ttl_mins: u64,
 }
@@ -122,7 +143,10 @@ impl AuthConfig {
                 password_hash_iterations: Self::parse_u32("AUTH_HASH_ITERATIONS", 
                     if mode == DeploymentMode::Development { 2 } else { 3 })?,
                 password_hash_parallelism: Self::parse_u32("AUTH_HASH_PARALLELISM", 1)?,
+                token_algorithm: Self::parse_token_algorithm()?,
                 token_signing_key: Self::require_env("AUTH_TOKEN_SIGNING_KEY")?,
+                eddsa_private_key: Self::get_env("AUTH_EDDSA_PRIVATE_KEY", "").into(),
+                eddsa_public_key: Self::get_env("AUTH_EDDSA_PUBLIC_KEY", "").into(),
                 access_token_ttl_mins: Self::parse_u64("AUTH_ACCESS_TOKEN_TTL_MINS", 15)?,
                 refresh_token_ttl_days: Self::parse_u64("AUTH_REFRESH_TOKEN_TTL_DAYS", 7)?,
             },
@@ -135,7 +159,10 @@ impl AuthConfig {
             service_auth: ServiceAuthConfig {
                 valid_service_keys: Self::parse_service_keys()?,
                 service_credentials: Self::parse_service_credentials()?,
+                service_token_algorithm: Self::parse_service_token_algorithm()?,
                 service_token_signing_key: Self::require_env("AUTH_SERVICE_TOKEN_SIGNING_KEY")?,
+                eddsa_service_private_key: Self::get_env("AUTH_EDDSA_SERVICE_PRIVATE_KEY", "").into(),
+                eddsa_service_public_key: Self::get_env("AUTH_EDDSA_SERVICE_PUBLIC_KEY", "").into(),
                 service_token_ttl_mins: Self::parse_u64("AUTH_SERVICE_TOKEN_TTL_MINS", 60)?,
             },
             mode,
@@ -266,6 +293,30 @@ impl AuthConfig {
         matches!(val.as_str(), "true" | "1" | "yes" | "on")
     }
 
+    fn parse_token_algorithm() -> anyhow::Result<TokenAlgorithm> {
+        let alg_str = Self::get_env("AUTH_TOKEN_ALGORITHM", "hmac").to_lowercase();
+        match alg_str.as_str() {
+            "eddsa" | "ed25519" => Ok(TokenAlgorithm::EdDSA),
+            "hmac" | "hs256" | "hs384" | "hs512" => Ok(TokenAlgorithm::Hmac),
+            _ => Err(anyhow::anyhow!(
+                "Invalid AUTH_TOKEN_ALGORITHM: {}. Must be 'eddsa' or 'hmac'",
+                alg_str
+            )),
+        }
+    }
+
+    fn parse_service_token_algorithm() -> anyhow::Result<TokenAlgorithm> {
+        let alg_str = Self::get_env("AUTH_SERVICE_TOKEN_ALGORITHM", "hmac").to_lowercase();
+        match alg_str.as_str() {
+            "eddsa" | "ed25519" => Ok(TokenAlgorithm::EdDSA),
+            "hmac" | "hs256" | "hs384" | "hs512" => Ok(TokenAlgorithm::Hmac),
+            _ => Err(anyhow::anyhow!(
+                "Invalid AUTH_SERVICE_TOKEN_ALGORITHM: {}. Must be 'eddsa' or 'hmac'",
+                alg_str
+            )),
+        }
+    }
+
     fn parse_service_keys() -> anyhow::Result<Vec<String>> {
         let keys_str = Self::require_env("AUTH_SERVICE_KEYS")?;
         let keys: Vec<String> = keys_str
@@ -341,6 +392,15 @@ impl std::fmt::Display for DeploymentMode {
             DeploymentMode::Development => write!(f, "development"),
             DeploymentMode::Production => write!(f, "production"),
             DeploymentMode::Test => write!(f, "test"),
+        }
+    }
+}
+
+impl std::fmt::Display for TokenAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TokenAlgorithm::EdDSA => write!(f, "EdDSA"),
+            TokenAlgorithm::Hmac => write!(f, "Hmac"),
         }
     }
 }
