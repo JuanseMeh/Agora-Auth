@@ -1,29 +1,29 @@
-//! HMAC-SHA256 token service implementation.
+//! Ed25519-EdDSA token service implementation.
 //!
 //! This module provides a concrete implementation of the `TokenService` port
-//! using HMAC-SHA256 signatures via the jsonwebtoken library.
+//! using Ed25519 signatures via the jsonwebtoken library.
 //!
 //! # Design Principles
 //!
 //! - **Pure cryptographic**: No session awareness, no revocation checks
 //! - **Deterministic errors**: All failures map to specific error types
 //! - **No secret leakage**: Keys are never logged or exposed in errors
-//! - **Algorithm enforcement**: Only HS256 is supported
+//! - **Algorithm enforcement**: Only EdDSA is supported
 //! - **JWT Standard Compliant**: Uses i64 timestamps, flattened claims
 
 use crate::adapters::crypto::error::JwtError;
-use crate::adapters::crypto::token::HmacKey;
+use crate::adapters::crypto::token::EddsaKey;
 use crate::core::token::{Token, TokenClaims};
 use crate::core::usecases::ports::TokenService;
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use serde::{Deserialize, Serialize};
 
-/// HMAC-SHA256-based token service implementation.
+/// Ed25519-EdDSA-based token service implementation.
 ///
-/// This service issues and validates JWT tokens signed with HMAC-SHA256.
+/// This service issues and validates JWT tokens signed with Ed25519.
 /// It implements the `TokenService` port from the core domain.
 #[derive(Debug, Clone)]
-pub struct HmacTokenService {
+pub struct EddsaTokenService {
     encoding_key: EncodingKey,
     decoding_key: DecodingKey,
     service_encoding_key: Option<EncodingKey>,
@@ -33,35 +33,35 @@ pub struct HmacTokenService {
     audience: Option<String>,
 }
 
-impl HmacTokenService {
-    /// Create a new HMAC token service from a key.
-    pub fn from_key(key: &HmacKey) -> Result<Self, JwtError> {
+impl EddsaTokenService {
+    /// Create a new EdDSA token service from an EdDSA key.
+    pub fn from_key(key: &EddsaKey) -> Result<Self, JwtError> {
         Ok(Self {
-            encoding_key: key.encoding_key().clone(),
-            decoding_key: key.decoding_key().clone(),
+            encoding_key: key.encoding_key().map_err(|e| JwtError::invalid_key(e))?,
+            decoding_key: key.decoding_key(),
             service_encoding_key: None,
             service_decoding_key: None,
-            algorithm: Algorithm::HS256,
+            algorithm: Algorithm::EdDSA,
             issuer: None,
             audience: None,
         })
     }
 
-    /// Create a new HMAC token service with the given raw key bytes.
-    pub fn from_secret_key(key: &[u8]) -> Result<Self, JwtError> {
-        let hmac_key = HmacKey::from_bytes(key)
+    /// Create a new EdDSA token service with the given raw private key bytes.
+    pub fn from_private_key(key: &[u8]) -> Result<Self, JwtError> {
+        let eddsa_key = EddsaKey::from_private_key_bytes(key)
             .map_err(|e| JwtError::invalid_key(e))?;
         
-        Self::from_key(&hmac_key)
+        Self::from_key(&eddsa_key)
     }
 
     /// Set the service token key for signing/validating service-to-service tokens.
     pub fn with_service_token_key(mut self, key: &[u8]) -> Result<Self, JwtError> {
-        let hmac_key = HmacKey::from_bytes(key)
+        let eddsa_key = EddsaKey::from_private_key_bytes(key)
             .map_err(|e| JwtError::invalid_key(e))?;
         
-        self.service_encoding_key = Some(hmac_key.encoding_key().clone());
-        self.service_decoding_key = Some(hmac_key.decoding_key().clone());
+        self.service_encoding_key = Some(eddsa_key.encoding_key().map_err(|e| JwtError::invalid_key(e))?);
+        self.service_decoding_key = Some(eddsa_key.decoding_key());
         
         Ok(self)
     }
@@ -193,7 +193,7 @@ impl HmacTokenService {
     }
 }
 
-impl TokenService for HmacTokenService {
+impl TokenService for EddsaTokenService {
     fn issue_access_token(&self, _subject: &str, claims: &str) -> Token {
         // Parse the claims JSON to extract identity information
         // The claims JSON has format: {"sub":"user_id","type":"access","exp":123456,"sid":"session_id"}
@@ -451,3 +451,5 @@ impl TokenService for HmacTokenService {
         }
     }
 }
+
+

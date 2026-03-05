@@ -6,15 +6,16 @@
 use std::sync::Arc;
 
 use crate::adapters::crypto::password::Argon2PasswordHasher;
-use crate::adapters::crypto::token::HmacTokenService;
+use crate::adapters::crypto::token::{EddsaTokenService, HmacTokenService};
 use crate::adapters::http::state::AppState;
 use crate::adapters::persistence::database::{Database, PoolConfig};
 use crate::adapters::persistence::repositories::{
     CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql,
 };
-use crate::core::usecases::ports::{PasswordHasher, ServiceRegistry};
+use crate::core::usecases::ports::{PasswordHasher, ServiceRegistry, TokenService};
 
-use super::config::AuthConfig;
+use crate::adapters::crypto::token::EddsaKey;
+use super::config::{AuthConfig, TokenAlgorithm};
 
 /// Container for all initialized application components.
 ///
@@ -67,7 +68,7 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
         Arc::new(credential_repo),
         Arc::new(session_repo),
         Arc::new(password_hasher),
-        Arc::new(token_service),
+        token_service, // Already Arc< dyn TokenService>
         service_registry,
     );
     
@@ -116,34 +117,70 @@ fn initialize_password_hasher(config: &AuthConfig) -> anyhow::Result<Argon2Passw
     Ok(hasher)
 }
 
-/// Initialize token service with signing key.
-fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<HmacTokenService> {
-    // Decode base64 signing key
+/// Initialize token service with signing key (supports both EdDSA and HMAC).
+fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<Arc<dyn TokenService>> {
     use base64::Engine;
-    let signing_key = base64::engine::general_purpose::STANDARD
-        .decode(&config.crypto.token_signing_key)
-        .map_err(|e| anyhow::anyhow!("Failed to decode token signing key: {}", e))?;
     
-    let token_service = HmacTokenService::from_secret_key(&signing_key)
-        .map_err(|e| anyhow::anyhow!("Failed to initialize token service: {:?}", e))?;
-    
-    // Decode service token signing key (separate key for service-to-service auth)
-    let service_signing_key = base64::engine::general_purpose::STANDARD
-        .decode(&config.service_auth.service_token_signing_key)
-        .map_err(|e| anyhow::anyhow!("Failed to decode service token signing key: {}", e))?;
-    
-    let token_service = token_service
-        .with_service_token_key(&service_signing_key)
-        .map_err(|e| anyhow::anyhow!("Failed to set service token key: {:?}", e))?;
-    
-    tracing::info!(
-        "Token service initialized (access_ttl={}m, refresh_ttl={}d, service_ttl={}m)",
-        config.crypto.access_token_ttl_mins,
-        config.crypto.refresh_token_ttl_days,
-        config.service_auth.service_token_ttl_mins
-    );
-    
-    Ok(token_service)
+    match config.crypto.token_algorithm {
+        TokenAlgorithm::EdDSA => {
+            // EdDSA mode: requires EdDSA keys
+            let private_key_b64 = config.crypto.eddsa_private_key.as_ref()
+                .ok_or_else(|| anyhow::anyhow!("EdDSA private key not configured (AUTH_EDDSA_PRIVATE_KEY)"))?;
+            let public_key_b64 = config.crypto.eddsa_public_key.as_ref()
+                .ok_or_else(|| anyhow::anyhow!("EdDSA public key not configured (AUTH_EDDSA_PUBLIC_KEY)"))?;
+            
+            let eddsa_key = EddsaKey::from_base64_pair(private_key_b64, public_key_b64)
+                .map_err(|e| anyhow::anyhow!("Failed to load EdDSA key: {}", e))?;
+            
+            let mut token_service = EddsaTokenService::from_key(&eddsa_key)
+                .map_err(|e| anyhow::anyhow!("Failed to initialize EdDSA token service: {:?}", e))?;
+            
+            // Configure service token key if EdDSA service keys are provided
+            if let (Some(service_private), Some(service_public)) = (
+                config.service_auth.eddsa_service_private_key.as_ref(),
+                config.service_auth.eddsa_service_public_key.as_ref()
+            ) {
+                let service_key = EddsaKey::from_base64_pair(service_private, service_public)
+                    .map_err(|e| anyhow::anyhow!("Failed to load EdDSA service key: {}", e))?;
+                token_service = token_service.with_service_token_key(&service_key.as_bytes())
+                    .map_err(|e| anyhow::anyhow!("Failed to set EdDSA service token key: {:?}", e))?;
+            }
+            
+            tracing::info!(
+                "Token service initialized (EdDSA, access_ttl={}m, refresh_ttl={}d)",
+                config.crypto.access_token_ttl_mins,
+                config.crypto.refresh_token_ttl_days
+            );
+            
+            Ok(Arc::new(token_service))
+        }
+        TokenAlgorithm::Hmac => {
+            // HMAC mode: legacy symmetric key
+            let signing_key = base64::engine::general_purpose::STANDARD
+                .decode(&config.crypto.token_signing_key)
+                .map_err(|e| anyhow::anyhow!("Failed to decode token signing key: {}", e))?;
+            
+            let mut token_service = HmacTokenService::from_secret_key(&signing_key)
+                .map_err(|e| anyhow::anyhow!("Failed to initialize HMAC token service: {:?}", e))?;
+            
+            // Decode service token signing key (separate key for service-to-service auth)
+            let service_signing_key = base64::engine::general_purpose::STANDARD
+                .decode(&config.service_auth.service_token_signing_key)
+                .map_err(|e| anyhow::anyhow!("Failed to decode service token signing key: {}", e))?;
+            
+            token_service = token_service
+                .with_service_token_key(&service_signing_key)
+                .map_err(|e| anyhow::anyhow!("Failed to set service token key: {:?}", e))?;
+            
+            tracing::info!(
+                "Token service initialized (HMAC, access_ttl={}m, refresh_ttl={}d)",
+                config.crypto.access_token_ttl_mins,
+                config.crypto.refresh_token_ttl_days
+            );
+            
+            Ok(Arc::new(token_service))
+        }
+    }
 }
 
 /// Build service registry for internal service authentication.

@@ -108,7 +108,7 @@ use crate::core::usecases::ports::{
     IdentityRepository, CredentialRepository, PasswordHasher, TokenService, 
     SessionRepository, ServiceRegistry
 };
-use crate::core::identity::{UserIdentity, WorkspaceIdentity};
+use crate::core::identity::{UserIdentity};
 use crate::core::credentials::StoredCredential;
 use crate::core::token::Token;
 use crate::core::usecases::ports::session_repository::Session;
@@ -119,9 +119,6 @@ impl IdentityRepository for MockIdentityRepo {
         Box::pin(async move { None })
     }
     fn find_by_id(&self, _id: &str) -> BoxFuture<'_, Option<UserIdentity>> {
-        Box::pin(async move { None })
-    }
-    fn find_workspace_by_id(&self, _id: &str) -> BoxFuture<'_, Option<WorkspaceIdentity>> {
         Box::pin(async move { None })
     }
     fn create(
