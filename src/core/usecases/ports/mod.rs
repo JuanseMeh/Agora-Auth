@@ -6,6 +6,7 @@
 //! Adapters must implement these traits to provide concrete behavior.
 
 pub mod identity_repository;
+pub mod external_identity_repository;
 pub mod credential_repository;
 pub mod session_repository;
 pub mod password_hasher;
@@ -15,6 +16,7 @@ pub mod service_registry;
 
 
 pub use identity_repository::IdentityRepository;
+pub use external_identity_repository::ExternalIdentityRepository;
 pub use credential_repository::CredentialRepository;
 pub use session_repository::SessionRepository;
 pub use password_hasher::PasswordHasher;
