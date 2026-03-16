@@ -1,9 +1,11 @@
 // Public authentication handler
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{HeaderMap, header::USER_AGENT, StatusCode},
     Json,
 };
+
+
 use crate::adapters::http::{
     dto::public::{AuthenticateRequest, AuthenticateResponse},
     error::{HttpError, ValidationError, LockedError, UnauthorizedError, InternalError},
@@ -23,11 +25,12 @@ use crate::core::error::CoreError;
 /// - 423 Locked if account is locked
 /// - 500 Internal Server Error on server failure
 pub async fn authenticate(
+    headers: HeaderMap,
     State(state): State<AppState>,
-    CleanJson(request): CleanJson<AuthenticateRequest>,
+    CleanJson(body): CleanJson<AuthenticateRequest>,
 ) -> Result<(StatusCode, Json<AuthenticateResponse>), HttpError> {
     // Validate request structure
-    request.validate()
+    body.validate()
         .map_err(|msg| HttpError::Validation(ValidationError::new(msg)))?;
 
     // Step 1: Authenticate the user
@@ -40,8 +43,8 @@ pub async fn authenticate(
     );
 
     let auth_input = AuthenticateUserInput {
-        identifier: request.identifier,
-        password: request.password,
+        identifier: body.identifier,
+        password: body.password,
     };
 
     let auth_result = auth_use_case.execute(auth_input).await;
@@ -60,6 +63,18 @@ pub async fn authenticate(
         }
     };
 
+    let ip_address = headers
+        .get("x-forwarded-for")
+        .or(headers.get("x-real-ip"))
+        .and_then(|h| h.to_str().ok())
+.and_then(|ips| ips.split(',').next().map(|ip: &str| ip.trim().to_string()))
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+
+    let user_agent = headers.get(USER_AGENT)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("unknown")
+        .to_string();
+
     // Step 2: Issue session with tokens
     let session_use_case = IssueSession::new(
         &*state.session_repo,
@@ -70,8 +85,9 @@ pub async fn authenticate(
 
     let session_input = IssueSessionInput {
         user,
-        ip_address: "0.0.0.0".to_string(), // TODO: Extract from request
-        user_agent: "unknown".to_string(),  // TODO: Extract from request
+        ip_address,
+        user_agent,
+        scopes: vec![]
     };
 
     let session_output = session_use_case.execute(session_input).await

@@ -12,7 +12,8 @@
 
 use crate::core::error::CoreError;
 use crate::core::identity::UserIdentity;
-use crate::core::token::Token;
+use crate::core::token::{Token, TokenClaims};
+use serde_json::to_string;
 use crate::core::usecases::ports::{SessionRepository, TokenService};
 
 /// Input contract for IssueSession use case.
@@ -20,6 +21,7 @@ pub struct IssueSessionInput {
     pub user: UserIdentity,
     pub ip_address: String,
     pub user_agent: String,
+    pub scopes: Vec<String>,
 }
 
 /// Output contract for IssueSession use case.
@@ -63,15 +65,28 @@ impl<'a> IssueSession<'a> {
 
         // Step 2: Issue access token with session_id in claims
         tracing::debug!("[ISSUE] Step 2: Issuing access token");
-        let access_token = self
-            .token_service
-            .issue_access_token(&input.user.id, &self.build_access_claims(&input.user, &session_id));
+        let iat = chrono::Utc::now().timestamp();
+        let access_claims = TokenClaims::new(
+            input.user.id.clone(),
+            iat,
+            iat + self.access_token_ttl_seconds as i64,
+            "access".to_string(),
+        ).with_sid(session_id.clone())
+         .with_scopes(input.scopes.clone());
+        let access_claims_json = to_string(&access_claims).expect("TokenClaims serialization failed");
+        let access_token = self.token_service.issue_access_token(&input.user.id, &access_claims_json);
 
         // Step 3: Issue refresh token with session_id in claims
         tracing::debug!("[ISSUE] Step 3: Issuing refresh token");
-        let refresh_token = self
-            .token_service
-            .issue_refresh_token(&input.user.id, &self.build_refresh_claims(&input.user, &session_id));
+        let iat = chrono::Utc::now().timestamp();
+        let refresh_claims = TokenClaims::new(
+            input.user.id.clone(),
+            iat,
+            iat + (self.refresh_token_ttl_days * 86400) as i64,
+            "refresh".to_string(),
+        ).with_sid(session_id.clone());
+        let refresh_claims_json = to_string(&refresh_claims).expect("TokenClaims serialization failed");
+        let refresh_token = self.token_service.issue_refresh_token(&input.user.id, &refresh_claims_json);
         
         tracing::debug!("[ISSUE] Refresh token value: {}", refresh_token.value());
 
@@ -103,25 +118,6 @@ impl<'a> IssueSession<'a> {
         })
     }
 
-    fn build_access_claims(&self, user: &UserIdentity, session_id: &str) -> String {
-        // Build claims for access token including session_id
-        format!(
-            r#"{{"sub":"{}","type":"access","exp":{},"sid":"{}"}}"#,
-            user.id,
-            chrono::Utc::now().timestamp() + self.access_token_ttl_seconds as i64,
-            session_id
-        )
-    }
-
-    fn build_refresh_claims(&self, user: &UserIdentity, session_id: &str) -> String {
-        // Build claims for refresh token including session_id
-        format!(
-            r#"{{"sub":"{}","type":"refresh","exp":{},"sid":"{}"}}"#,
-            user.id,
-            chrono::Utc::now().timestamp() + (self.refresh_token_ttl_days * 86400) as i64,
-            session_id
-        )
-    }
 
     fn build_session_metadata(&self, input: &IssueSessionInput) -> String {
         // Build session metadata JSON
