@@ -25,17 +25,20 @@ rand = "0.10.0"
 ed25519-dalek = "2.2.0"
 base64 = "0.22.1"
 hex = "0.4.3"
+pkcs1 = { version = "0.7", features = ["alloc"] }
 pkcs8 = { version = "0.10.2", features = ["encryption", "pem"] }
+rsa = "0.9.10"
 #// Web Framework & Runtime
 tokio = { version = "1.50.0", features = ["full"] }
 axum = "0.8.8"
 tower-http = { version = "0.6.8", features = ["trace", "cors"] }
 futures = "0.3.32"
 # // Logging
-tracing = "0.1"
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 # // Utilities & Config
 anyhow = "1.0.102"
 dotenvy = "0.15"
+dashmap = "6.1.0"
 [dev-dependencies]
 tower = { version = "0.5.3", features = ["util"] }
