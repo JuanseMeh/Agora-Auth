@@ -132,3 +132,11 @@ impl From<InvariantError> for CoreError {
         CoreError::Invariant(err)
     }
 }
+
+impl From<crate::adapters::crypto::error::JwtError> for CoreError {
+    fn from(err: crate::adapters::crypto::error::JwtError) -> Self {
+        CoreError::Token(TokenError::Malformed {
+            reason: err.to_string(),
+        })
+    }
+}
