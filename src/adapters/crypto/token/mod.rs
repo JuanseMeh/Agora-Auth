@@ -34,6 +34,13 @@ pub mod eddsa_keys;
 pub mod eddsa_token_service;
 pub mod hmac_keys;
 pub mod hmac_token_service;
+pub mod google_validator_config;
+pub mod jwks_provider;
+pub mod google_rs256_validator;
+
+pub use google_validator_config::GoogleValidatorConfig;
+pub use google_rs256_validator::GoogleRs256Validator;
+pub use jwks_provider::JwksProvider;
 
 pub use eddsa_keys::{EddsaKey, ED25519_KEY_SIZE};
 pub use eddsa_token_service::EddsaTokenService;
