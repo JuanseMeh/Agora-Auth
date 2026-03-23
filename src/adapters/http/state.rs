@@ -3,11 +3,14 @@
 use std::sync::Arc;
 use crate::core::usecases::ports::{
     CredentialRepository, 
+    ExchangeAuthorizationCode,
+    ExternalIdentityRepository,
+    ExternalTokenValidator,
     IdentityRepository, 
     PasswordHasher, 
     SessionRepository, 
+    ServiceRegistry, 
     TokenService,
-    ServiceRegistry,
 };
 
 /// Application state shared across all HTTP handlers
@@ -39,6 +42,12 @@ pub struct AppState {
     pub rotate_refresh_tokens: bool,
     /// Service token TTL in seconds
     pub service_token_ttl_seconds: u64,
+    /// Google OAuth token validator
+    pub google_token_validator: Arc<dyn ExternalTokenValidator + Send + Sync>,
+    /// Google OAuth code exchanger
+    pub google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
+    /// External identity repository for OAuth linking
+    pub external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
 }
 
 impl AppState {
@@ -50,6 +59,9 @@ impl AppState {
         password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
         token_service: Arc<dyn TokenService + Send + Sync>,
         service_registry: Arc<dyn ServiceRegistry + Send + Sync>,
+        google_token_validator: Arc<dyn ExternalTokenValidator + Send + Sync>,
+        google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
+        external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
         access_token_ttl_seconds: u64,
         refresh_token_ttl_days: u64,
         rotate_refresh_tokens: bool,
@@ -62,6 +74,9 @@ impl AppState {
             password_hasher,
             token_service,
             service_registry,
+            google_token_validator,
+            google_code_exchanger,
+            external_identity_repo,
             access_token_ttl_seconds,
             refresh_token_ttl_days,
             rotate_refresh_tokens,
