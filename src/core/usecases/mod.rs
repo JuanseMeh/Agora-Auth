@@ -55,6 +55,7 @@ pub mod policies;
 pub mod ports;
 
 pub use authenticate_user::*;
+pub mod exchange_google_code;
 pub use issue_session::*;
 pub use issue_service_token::*;
 pub use issue_session_for_identity::*;

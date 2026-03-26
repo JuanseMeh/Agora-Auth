@@ -1,6 +1,6 @@
 //! Tests for configuration management.
 
-use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, SecurityConfig, ServerConfig, ServiceAuthConfig, TokenAlgorithm};
+use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, GoogleOAuthConfig, SecurityConfig, ServerConfig, ServiceAuthConfig, TokenAlgorithm};
 
 #[test]
 fn test_deployment_mode_display() {
@@ -131,10 +131,18 @@ fn test_auth_config_validation_valid() {
             valid_service_keys: vec!["service-key".to_string()],
             service_credentials: vec![],
             service_token_algorithm: TokenAlgorithm::Hmac,
-            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVuZ3VnaC1mb3ItaHMyNTY=".to_string(),
+            service_token_signing_key: "dGVzdC1rZXktdGhhdC1pcy1sb25nLWVub3VnaC1mb3ItaHMyNTY=".to_string(),
             eddsa_service_private_key: None,
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
+        },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
         mode: DeploymentMode::Production,
     };
@@ -179,6 +187,14 @@ fn test_auth_config_validation_invalid_ttl() {
             eddsa_service_private_key: None,
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
+        },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
         mode: DeploymentMode::Production,
     };
@@ -227,6 +243,14 @@ fn test_auth_config_validation_short_signing_key() {
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
+        },
         mode: DeploymentMode::Production,
     };
     
@@ -273,6 +297,14 @@ fn test_auth_config_validation_zero_max_attempts() {
             eddsa_service_private_key: None,
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
+        },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
         mode: DeploymentMode::Production,
     };
@@ -321,6 +353,14 @@ fn test_auth_config_validation_production_requirements() {
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
+        },
         mode: DeploymentMode::Production,
     };
     
@@ -368,6 +408,14 @@ fn test_auth_config_validation_development_allows_lower_security() {
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
         },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
+        },
         mode: DeploymentMode::Development,
     };
     
@@ -411,6 +459,14 @@ fn test_auth_config_validation_empty_service_keys() {
             eddsa_service_private_key: None,
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
+        },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
         mode: DeploymentMode::Production,
     };

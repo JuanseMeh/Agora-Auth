@@ -32,6 +32,14 @@ pub enum AuthenticationError {
         provider: String,
         reason: String,
     },
+    /// Invalid external identity (malformed provider/user_id)
+    InvalidExternalIdentity {
+        reason: String,
+    },
+    /// Invalid external token (signature/claims failure)
+    InvalidExternalToken {
+        reason: String,
+    },
     /// Invalid credentials provided
     InvalidCredentials,
     /// Service is not active or not authorized
@@ -72,6 +80,20 @@ impl AuthenticationError {
         }
     }
 
+    /// Create InvalidExternalIdentity error
+    pub fn invalid_external_identity(reason: impl Into<String>) -> Self {
+        Self::InvalidExternalIdentity {
+            reason: reason.into(),
+        }
+    }
+
+    /// Create InvalidExternalToken error
+    pub fn invalid_external_token(reason: impl Into<String>) -> Self {
+        Self::InvalidExternalToken {
+            reason: reason.into(),
+        }
+    }
+
     /// Returns true if this error is an AccountLocked variant
     pub fn is_account_locked(&self) -> bool {
         matches!(self, Self::AccountLocked { .. })
@@ -99,8 +121,9 @@ impl AuthenticationError {
     }
 }
 
+
 impl std::fmt::Display for AuthenticationError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::UserNotFound { reason } => write!(f, "User not found: {}", reason),
             Self::MaxAttemptsExceeded { attempts } => {
@@ -121,6 +144,12 @@ impl std::fmt::Display for AuthenticationError {
                     "External identity provider '{}' rejected authentication: {}",
                     provider, reason
                 )
+            }
+            Self::InvalidExternalIdentity { reason } => {
+                write!(f, "Invalid external identity: {}", reason)
+            }
+            Self::InvalidExternalToken { reason } => {
+                write!(f, "Invalid external token: {}", reason)
             }
             Self::InvalidCredentials => {
                 write!(f, "Invalid credentials provided")

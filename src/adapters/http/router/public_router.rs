@@ -2,11 +2,14 @@
 
 use axum::{routing::post, Router};
 use crate::adapters::http::{handlers, middleware, state::AppState};
+use crate::adapters::http::handlers::public::exchange_google_code;
+
 
 pub fn public_routes() -> Router<AppState> {
     // Public endpoint - authentication without Bearer token (credentials in body)
     let authenticate = Router::new()
-        .route("/auth/authenticate", post(handlers::authenticate));
+        .route("/auth/authenticate", post(handlers::authenticate))
+        .route("/auth/google/callback", post(exchange_google_code));
 
     // Protected endpoints - require Bearer token in Authorization header
     let protected = Router::new()
