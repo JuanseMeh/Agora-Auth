@@ -10,6 +10,22 @@ use std::env;
 /// All environment variables are parsed and validated at startup.
 /// No environment access occurs outside this module.
 #[derive(Debug, Clone)]
+pub struct GoogleOAuthConfig {
+    /// Google OAuth2 Client ID
+    pub client_id: String,
+    /// Google OAuth2 Client Secret
+    pub client_secret: String,
+    /// Callback URL registered in Google Console
+    pub redirect_uri: String,
+    /// Google issuer URL
+    pub issuer: String,
+    /// Google JWKS endpoint for token validation
+    pub jwks_url: String,
+    /// Google OAuth token url
+    pub token_url: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct AuthConfig {
     /// Server binding configuration
     pub server: ServerConfig,
@@ -21,6 +37,8 @@ pub struct AuthConfig {
     pub security: SecurityConfig,
     /// Service-to-service authentication
     pub service_auth: ServiceAuthConfig,
+    /// Google OAuth2 configuration
+    pub google_oauth: GoogleOAuthConfig,
     /// Operational mode (development, production, test)
     pub mode: DeploymentMode,
 }
@@ -165,10 +183,18 @@ impl AuthConfig {
                 eddsa_service_public_key: Self::get_env("AUTH_EDDSA_SERVICE_PUBLIC_KEY", "").into(),
                 service_token_ttl_mins: Self::parse_u64("AUTH_SERVICE_TOKEN_TTL_MINS", 60)?,
             },
+            google_oauth: GoogleOAuthConfig {
+                client_id: Self::require_env("GOOGLE_CLIENT_ID")?,
+                client_secret: Self::require_env("GOOGLE_CLIENT_SECRET")?,
+                redirect_uri: Self::require_env("GOOGLE_REDIRECT_URI")?,
+                issuer: Self::get_env("GOOGLE_ISSUER", "https://accounts.google.com"),
+                jwks_url: Self::get_env("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
+                token_url: Self::get_env("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token"),
+            },
             mode,
         };
 
-        config.validate()?;
+        config.validate()?; 
         Ok(config)
     }
 

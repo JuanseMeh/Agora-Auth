@@ -4,15 +4,26 @@
 //! following the dependency graph defined in the bootstrap README.
 
 use std::sync::Arc;
+use reqwest::Client;
 
 use crate::adapters::crypto::password::Argon2PasswordHasher;
 use crate::adapters::crypto::token::{EddsaTokenService, HmacTokenService};
 use crate::adapters::http::state::AppState;
 use crate::adapters::persistence::database::{Database, PoolConfig};
 use crate::adapters::persistence::repositories::{
-    CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql,
+    CredentialRepositorySql, 
+    ExternalIdentityRepositorySql,
+    IdentityRepositorySql, 
+    SessionRepositorySql,
 };
-use crate::core::usecases::ports::{PasswordHasher, ServiceRegistry, TokenService};
+use crate::core::usecases::ports::{
+    ExchangeAuthorizationCode,
+    ExternalIdentityRepository,
+    ExternalTokenValidator, 
+    PasswordHasher, 
+    ServiceRegistry, 
+    TokenService
+};
 
 use crate::adapters::crypto::token::EddsaKey;
 use super::config::{AuthConfig, TokenAlgorithm};
@@ -50,6 +61,7 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
     let identity_repo = IdentityRepositorySql::new(database.clone());
     let credential_repo = CredentialRepositorySql::new(database.clone());
     let session_repo = SessionRepositorySql::new(database.clone());
+    let external_identity_repo = ExternalIdentityRepositorySql::new(database.clone());
     
     // Step 3: Initialize crypto adapters
     tracing::info!("Initializing crypto adapters...");
@@ -60,6 +72,38 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
     tracing::info!("Building service registry...");
     let service_registry = build_service_registry(config);
     
+    // Step 4.5: Create Google OAuth token validator
+    tracing::info!("Initializing Google OAuth token validator...");
+    let validator_config = crate::adapters::crypto::token::GoogleValidatorConfig::new(
+        config.google_oauth.jwks_url.clone(),
+        config.google_oauth.issuer.clone(),
+        config.google_oauth.client_id.clone(),
+    );
+    let google_token_validator = Arc::new(crate::adapters::crypto::token::GoogleRs256Validator::new(validator_config)) as Arc<dyn ExternalTokenValidator + Send + Sync>;
+
+    // Create Google code exchanger
+    tracing::info!("Initializing Google code exchanger...");
+    let http_client = Client::builder()
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to build HTTP client: {}", e))?;
+
+    let exchanger_config = crate::adapters::clients::google::GoogleCodeExchangerConfig {
+        client_id: config.google_oauth.client_id.clone(),
+        client_secret: config.google_oauth.client_secret.clone(),
+        token_url: config.google_oauth.token_url.clone(),
+        redirect_uri: config.google_oauth.redirect_uri.clone(),
+        timeout: std::time::Duration::from_secs(10),
+        max_retries: 3,
+    };
+
+    let google_code_exchanger = Arc::new(
+        crate::adapters::clients::google::GoogleCodeExchanger::new(
+            exchanger_config,
+            http_client,
+            google_token_validator.clone(),
+        )
+    ) as Arc<dyn ExchangeAuthorizationCode + Send + Sync>;
+    
     // Step 5: Build HTTP application state
     tracing::info!("Building HTTP state...");
     let app_state = build_app_state(
@@ -68,8 +112,11 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
         Arc::new(credential_repo),
         Arc::new(session_repo),
         Arc::new(password_hasher),
-        token_service, // Already Arc< dyn TokenService>
+        token_service,
         service_registry,
+        google_token_validator.clone(),
+        google_code_exchanger,
+        Arc::new(external_identity_repo),
     );
     
     tracing::info!("Component initialization complete");
@@ -215,19 +262,25 @@ fn build_app_state(
     password_hasher: Arc<dyn crate::core::usecases::ports::PasswordHasher + Send + Sync>,
     token_service: Arc<dyn crate::core::usecases::ports::TokenService + Send + Sync>,
     service_registry: Arc<dyn ServiceRegistry + Send + Sync>,
+    google_token_validator: Arc<dyn ExternalTokenValidator + Send + Sync>,
+    google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
+    external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
 ) -> AppState {
-    AppState::new(
-        identity_repo,
-        credential_repo,
-        session_repo,
-        password_hasher,
-        token_service,
-        service_registry,
-        config.crypto.access_token_ttl_mins * 60, // Convert to seconds
-        config.crypto.refresh_token_ttl_days,
-        true, // rotate_refresh_tokens
-        config.service_auth.service_token_ttl_mins * 60, // Convert to seconds
-    )
+        AppState::new(
+            identity_repo,
+            credential_repo,
+            session_repo,
+            password_hasher,
+            token_service,
+            service_registry,
+            google_token_validator,
+            google_code_exchanger.clone(),
+            external_identity_repo,
+            config.crypto.access_token_ttl_mins * 60, // Convert to seconds
+            config.crypto.refresh_token_ttl_days,
+            true, // rotate_refresh_tokens
+            config.service_auth.service_token_ttl_mins * 60, // Convert to seconds
+        )
 }
 
 /// Simple in-memory service registry implementation.

@@ -10,12 +10,14 @@ Each repository:
  - Does NOT contain business logic
 */
 
-pub mod identity_repository_sql;
 pub mod credential_repository_sql;
+pub mod external_identity_repository_sql;
+pub mod identity_repository_sql;
 pub mod session_repository_sql;
 
-pub use identity_repository_sql::IdentityRepositorySql;
 pub use credential_repository_sql::CredentialRepositorySql;
+pub use external_identity_repository_sql::ExternalIdentityRepositorySql;
+pub use identity_repository_sql::IdentityRepositorySql;
 pub use session_repository_sql::SessionRepositorySql;
 
 #[cfg(test)]

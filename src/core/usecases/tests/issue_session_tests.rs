@@ -136,6 +136,7 @@ async fn test_issue_session_success() {
         user: UserIdentity::new("user123"),
         ip_address: "127.0.0.1".to_string(),
         user_agent: "Test".to_string(),
+        scopes: vec!["user:read".to_string()],
     };
     
     let result = use_case.execute(input).await;
@@ -178,6 +179,7 @@ async fn test_issue_session_different_users() {
             user: UserIdentity::new(user_id),
             ip_address: "127.0.0.1".to_string(),
             user_agent: "Test".to_string(),
+            scopes: vec!["user:read".to_string()],
         };
         
         let output = use_case.execute(input).await.unwrap();
@@ -208,6 +210,7 @@ async fn test_issue_session_with_metadata() {
         user: UserIdentity::new("user789"),
         ip_address: "203.0.113.1".to_string(),
         user_agent: "CustomApp/1.0".to_string(),
+        scopes: vec!["user:read".to_string()],
     };
     
     let result = use_case.execute(input).await;
@@ -237,6 +240,7 @@ async fn test_issue_session_token_expiration() {
             user: UserIdentity::new(&format!("user_{}", ttl)),
             ip_address: "127.0.0.1".to_string(),
             user_agent: "Test".to_string(),
+            scopes: vec!["user:read".to_string()],
         };
         
         let output = use_case.execute(input).await.unwrap();
