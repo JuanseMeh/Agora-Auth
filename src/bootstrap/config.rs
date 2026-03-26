@@ -21,8 +21,11 @@ pub struct GoogleOAuthConfig {
     pub issuer: String,
     /// Google JWKS endpoint for token validation
     pub jwks_url: String,
+    /// Google OAuth token url
+    pub token_url: String,
 }
 
+#[derive(Debug, Clone)]
 pub struct AuthConfig {
     /// Server binding configuration
     pub server: ServerConfig,
@@ -186,6 +189,7 @@ impl AuthConfig {
                 redirect_uri: Self::require_env("GOOGLE_REDIRECT_URI")?,
                 issuer: Self::get_env("GOOGLE_ISSUER", "https://accounts.google.com"),
                 jwks_url: Self::get_env("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
+                token_url: Self::get_env("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token"),
             },
             mode,
         };
