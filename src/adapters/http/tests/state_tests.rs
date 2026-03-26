@@ -5,8 +5,12 @@ use futures::future::BoxFuture;
 use crate::adapters::http::state::AppState;
 use crate::core::usecases::ports::{
     IdentityRepository, CredentialRepository, SessionRepository, TokenService, PasswordHasher, ServiceRegistry,
+    ExternalTokenValidator, ExchangeAuthorizationCode, ExternalIdentityRepository,
 };
-use crate::core::identity::UserIdentity;
+
+use crate::core::identity::{UserIdentity, ExternalIdentity};
+use crate::core::error::CoreError;
+use uuid::Uuid;
 use crate::core::credentials::StoredCredential;
 use crate::core::token::Token;
 
@@ -146,6 +150,58 @@ impl ServiceRegistry for MockServiceRegistry {
     }
 }
 
+struct MockExternalTokenValidator;
+struct MockExchangeAuthorizationCode;
+struct MockExternalIdentityRepository;
+
+impl ExternalTokenValidator for MockExternalTokenValidator {
+    fn validate(&self, _token: &str) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
+        Box::pin(async {
+            Ok(ExternalIdentity {
+                provider: "google".to_string(),
+                provider_user_id: "test123".to_string(),
+                email: Some("test@example.com".to_string()),
+            })
+        })
+    }
+}
+
+impl ExchangeAuthorizationCode for MockExchangeAuthorizationCode {
+    fn exchange(&self, _code: &str, _state: Option<&str>) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
+        Box::pin(async {
+            Ok(ExternalIdentity {
+                provider: "google".to_string(),
+                provider_user_id: "test123".to_string(),
+                email: Some("test@example.com".to_string()),
+            })
+        })
+    }
+}
+
+impl ExternalIdentityRepository for MockExternalIdentityRepository {
+    fn find_by_provider_user(
+        &self,
+        _provider: &str,
+        _provider_user_id: &str,
+    ) -> BoxFuture<'_, Result<Option<Uuid>, anyhow::Error>> {
+        Box::pin(async { Ok(None) })
+    }
+
+    fn upsert(
+        &self,
+        _provider: &str,
+        _provider_user_id: &str,
+        _user_id: Uuid,
+        _email: Option<&str>,
+    ) -> BoxFuture<'_, Result<Uuid, anyhow::Error>> {
+        Box::pin(async { Ok(Uuid::nil()) })
+    }
+
+    fn delete(&self, _provider: &str, _provider_user_id: &str) -> BoxFuture<'_, Result<(), anyhow::Error>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
 // ============================================================================
 // Test Cases
 // ============================================================================
@@ -159,10 +215,13 @@ fn test_app_state_creation() {
         Arc::new(MockPasswordHasher),
         Arc::new(MockTokenService),
         Arc::new(MockServiceRegistry),
-        3600,      // access_token_ttl_seconds
-        7,         // refresh_token_ttl_days
-        true,      // rotate_refresh_tokens
-        3600,      // service_token_ttl_seconds
+        Arc::new(MockExternalTokenValidator),
+        Arc::new(MockExchangeAuthorizationCode),
+        Arc::new(MockExternalIdentityRepository),
+        3600u64,
+        7u64,
+        true,
+        3600u64,
     );
     
     // Verify the state was created successfully
@@ -181,10 +240,13 @@ fn test_app_state_clone() {
         Arc::new(MockPasswordHasher),
         Arc::new(MockTokenService),
         Arc::new(MockServiceRegistry),
-        3600,
-        7,
+        Arc::new(MockExternalTokenValidator),
+        Arc::new(MockExchangeAuthorizationCode),
+        Arc::new(MockExternalIdentityRepository),
+        3600u64,
+        7u64,
         true,
-        3600,
+        3600u64,
     );
     
     // Clone should work since all fields are Arc or Copy types
@@ -206,10 +268,13 @@ fn test_app_state_default_token_ttls() {
         Arc::new(MockPasswordHasher),
         Arc::new(MockTokenService),
         Arc::new(MockServiceRegistry),
-        900,   // 15 minutes
-        1,     // 1 day
+        Arc::new(MockExternalTokenValidator),
+        Arc::new(MockExchangeAuthorizationCode),
+        Arc::new(MockExternalIdentityRepository),
+        900u64,
+        1u64,
         false,
-        1800,  // 30 minutes
+        1800u64,
     );
     
     assert_eq!(short_lived.access_token_ttl_seconds, 900);
@@ -228,10 +293,13 @@ fn test_app_state_long_lived_tokens() {
         Arc::new(MockPasswordHasher),
         Arc::new(MockTokenService),
         Arc::new(MockServiceRegistry),
-        86400, // 1 day
-        30,    // 30 days
+        Arc::new(MockExternalTokenValidator),
+        Arc::new(MockExchangeAuthorizationCode),
+        Arc::new(MockExternalIdentityRepository),
+        86400u64,
+        30u64,
         true,
-        7200,  // 2 hours
+        7200u64,
     );
     
     assert_eq!(long_lived.access_token_ttl_seconds, 86400);

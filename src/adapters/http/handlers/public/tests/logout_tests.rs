@@ -29,6 +29,9 @@ async fn test_logout_missing_both_session_and_token() {
         Arc::new(MockPasswordHasher),
         Arc::new(MockTokenService),
         Arc::new(MockServiceRegistry),
+        Arc::new(MockTokenService),
+        Arc::new(MockTokenService),
+        Arc::new(MockIdentityRepo),
         3600,  // access_token_ttl_seconds
         30,    // refresh_token_ttl_days
         true,  // rotate_refresh_tokens
@@ -65,17 +68,20 @@ async fn test_logout_missing_both_session_and_token() {
 
 #[tokio::test]
 async fn test_logout_invalid_json() {
-    let state = AppState::new(
+let state = AppState::new(
         Arc::new(MockIdentityRepo),
         Arc::new(MockCredentialRepo),
         Arc::new(MockSessionRepo),
         Arc::new(MockPasswordHasher),
         Arc::new(MockTokenService),
         Arc::new(MockServiceRegistry),
+        Arc::new(MockTokenService),
+        Arc::new(MockTokenService),
+        Arc::new(MockIdentityRepo),
         3600,
         30,
         true,
-        3600,  // service_token_ttl_seconds
+        3600,
     );
     
     let app = Router::new()
@@ -106,12 +112,16 @@ async fn test_logout_invalid_json() {
 
 use crate::core::usecases::ports::{
     IdentityRepository, CredentialRepository, PasswordHasher, TokenService, 
-    SessionRepository, ServiceRegistry
+    SessionRepository, ServiceRegistry,
+    ExternalTokenValidator, ExchangeAuthorizationCode, ExternalIdentityRepository
 };
 use crate::core::identity::{UserIdentity};
 use crate::core::credentials::StoredCredential;
 use crate::core::token::Token;
 use crate::core::usecases::ports::session_repository::Session;
+use crate::core::identity::ExternalIdentity;
+use crate::core::error::CoreError;
+use uuid::Uuid;
 
 struct MockIdentityRepo;
 impl IdentityRepository for MockIdentityRepo {
@@ -130,6 +140,30 @@ impl IdentityRepository for MockIdentityRepo {
         _algorithm: &str,
         _iterations: u32,
     ) -> BoxFuture<'_, Result<(), String>> {
+        Box::pin(async move { Ok(()) })
+    }
+}
+
+impl ExternalIdentityRepository for MockIdentityRepo {
+    fn find_by_provider_user(
+        &self,
+        _provider: &str,
+        _provider_user_id: &str,
+    ) -> BoxFuture<'_, Result<Option<Uuid>, anyhow::Error>> {
+        Box::pin(async move { Ok(None) })
+    }
+
+    fn upsert(
+        &self,
+        _provider: &str,
+        _provider_user_id: &str,
+        _user_id: Uuid,
+        _email: Option<&str>,
+    ) -> BoxFuture<'_, Result<Uuid, anyhow::Error>> {
+        Box::pin(async move { Ok(uuid::Uuid::nil()) })
+    }
+
+    fn delete(&self, _provider: &str, _provider_user_id: &str) -> BoxFuture<'_, Result<(), anyhow::Error>> {
         Box::pin(async move { Ok(()) })
     }
 }
@@ -199,6 +233,22 @@ impl TokenService for MockTokenService {
         } else {
             Err(())
         }
+    }
+}
+
+impl ExternalTokenValidator for MockTokenService {
+    fn validate(&self, _token: &str) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
+        Box::pin(async move {
+            ExternalIdentity::new("mock_provider".to_string(), "mock_external_id".to_string(), None)
+        })
+    }
+}
+
+impl ExchangeAuthorizationCode for MockTokenService {
+    fn exchange(&self, _code: &str, _state: Option<&str>) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
+        Box::pin(async move {
+            Ok(ExternalIdentity::new("mock_provider".to_string(), "mock_external_id".to_string(), None)?)
+        })
     }
 }
 
