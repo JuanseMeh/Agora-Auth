@@ -6,3 +6,6 @@ pub mod session_repository_tests;
 pub mod password_hasher_tests;
 pub mod token_service_tests;
 pub mod clock_tests;
+pub mod exchange_authorization_code_tests;
+pub mod external_identity_repository_tests;
+pub mod external_token_validator_tests;
