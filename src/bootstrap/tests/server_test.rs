@@ -1,6 +1,15 @@
 //! Tests for the server module.
 
-use crate::bootstrap::config::{AuthConfig, CryptoConfig, DatabaseConfig, DeploymentMode, SecurityConfig, ServerConfig, ServiceAuthConfig, TokenAlgorithm};
+use crate::bootstrap::config::{
+    AuthConfig, 
+    CryptoConfig, 
+    DatabaseConfig, 
+    DeploymentMode, 
+    SecurityConfig, 
+    ServerConfig, 
+    ServiceAuthConfig, 
+    GoogleOAuthConfig,
+    TokenAlgorithm};
 use crate::bootstrap::server::health_check;
 
 /// Create a test configuration for server tests.
@@ -39,6 +48,14 @@ fn create_test_config() -> AuthConfig {
             eddsa_service_private_key: None,
             eddsa_service_public_key: None,
             service_token_ttl_mins: 60,
+        },
+        google_oauth: GoogleOAuthConfig {
+            client_id: "test-client-id.googleusercontent.com".to_string(),
+            client_secret: "test-client-secret".to_string(),
+            redirect_uri: "http://localhost:8080/auth/google/callback".to_string(),
+            issuer: "https://accounts.google.com".to_string(),
+            jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
         mode: DeploymentMode::Test,
     }
