@@ -194,6 +194,15 @@ impl AuthConfig {
             mode,
         };
 
+        // Validator for service credentials - print parsed results
+        println!("Parsed SERVICE CREDENTIALS ({} services):", config.service_auth.service_credentials.len());
+        for (service_id, hash) in &config.service_auth.service_credentials {
+            println!("   - {}: OK (hash length: {} chars)", service_id, hash.len());
+        }
+        if config.service_auth.service_credentials.is_empty() {
+            println!("WARNING: No service credentials configured!");
+        }
+
         config.validate()?; 
         Ok(config)
     }
@@ -358,58 +367,71 @@ impl AuthConfig {
     /// Parse service credentials from environment.
     /// Format: service_id:secret (comma-separated, but secret can contain commas if using PHC format)
     /// Note: The secret should be an Argon2 hash in PHC format: $argon2id$v=19$m=65536,t=3,p=4$...
-    /// Note: In .env files, use $$ to escape $ (e.g., $$argon2id$$v=19$$m=65536,t=3,p=4$$...)
-    fn parse_service_credentials() -> anyhow::Result<Vec<(String, String)>> {
-        let creds_str = Self::get_env("AUTH_SERVICE_CREDENTIALS", "");
-        if creds_str.is_empty() {
-            return Ok(Vec::new());
-        }
-        
-        // Note: The value should be quoted in .env to prevent $ variable expansion
-        // e.g., AUTH_SERVICE_CREDENTIALS="user_service:$argon2id$..."
-        
-        // Log the actual raw value from env
-        tracing::info!("[CONFIG] Parsed service credentials raw (first 60 chars): '{}'", &creds_str[..60.min(creds_str.len())]);
-        
-        // Parse credentials - handle PHC format which contains commas
-        // Format: service_id:$argon2id$...,service_id2:$argon2id$...
-        // We split on comma only when it's not inside the PHC hash
-        let mut credentials: Vec<(String, String)> = Vec::new();
-        let mut current_cred = String::new();
-        let mut in_phc_hash = false;
-        
-        for ch in creds_str.chars() {
-            if ch == ',' && !in_phc_hash {
-                // Split here - we're at a credential separator
-                if !current_cred.trim().is_empty() {
-                    let parts: Vec<&str> = current_cred.splitn(2, ':').collect();
-                    if parts.len() == 2 {
-                        credentials.push((parts[0].trim().to_string(), parts[1].trim().to_string()));
-                    }
-                }
-                current_cred = String::new();
-            } else {
-                current_cred.push(ch);
-                
-                // Detect start of PHC hash format (argon2id or argon2)
-                // Once we see $argon2 or $argon2id, we're in the hash portion
-                // and should not split on commas until we see the closing $$
-                if current_cred.ends_with("$argon2id$") || current_cred.ends_with("$argon2$") {
-                    in_phc_hash = true;
-                }
-            }
-        }
-        
-        // Don't forget the last credential
-        if !current_cred.trim().is_empty() {
-            let parts: Vec<&str> = current_cred.splitn(2, ':').collect();
-            if parts.len() == 2 {
-                credentials.push((parts[0].trim().to_string(), parts[1].trim().to_string()));
-            }
-        }
-        
-        Ok(credentials)
+    /// Note: In .env files, use \$ to escape $ in quoted string
+   fn parse_service_credentials() -> anyhow::Result<Vec<(String, String)>> {
+    let creds_str = Self::get_env("AUTH_SERVICE_CREDENTIALS", "");
+    if creds_str.is_empty() {
+        return Ok(Vec::new());
     }
+
+    tracing::info!(
+        "[CONFIG] Raw AUTH_SERVICE_CREDENTIALS (first 80 chars): '{}'",
+        &creds_str[..80.min(creds_str.len())]
+    );
+
+    // Strategy: scan for ",<word_chars>:$argon2" as the real credential boundary.
+    // PHC hashes start with $argon2, so a comma that is a *separator* will be
+    // immediately followed by an identifier and a colon before the next $.
+    // We collect split indices and then slice the string ourselves.
+    let bytes = creds_str.as_bytes();
+    let len = bytes.len();
+    let mut split_positions: Vec<usize> = vec![0]; // start of each credential
+
+    let mut i = 0;
+    while i < len {
+        if bytes[i] == b',' {
+            // Look ahead: skip the comma, then expect [a-zA-Z0-9_]+:$
+            let mut j = i + 1;
+            // consume identifier chars
+            while j < len && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_') {
+                j += 1;
+            }
+            // Must be followed by ':'  and then '$' to be a real boundary
+            if j < len && bytes[j] == b':' && j + 1 < len && bytes[j + 1] == b'$' {
+                split_positions.push(i + 1); // start after the comma
+            }
+        }
+        i += 1;
+    }
+
+    let mut credentials = Vec::new();
+    for (idx, &start) in split_positions.iter().enumerate() {
+        let end = if idx + 1 < split_positions.len() {
+            split_positions[idx + 1] - 1 // exclude the comma
+        } else {
+            len
+        };
+        let chunk = &creds_str[start..end];
+        if let Some((service, hash)) = Self::parse_credential_part(chunk) {
+            credentials.push((service, hash));
+        }
+    }
+
+    tracing::debug!("Parsed {} service credentials", credentials.len());
+    Ok(credentials)
+}
+    
+    /// Helper to parse service:secret
+    fn parse_credential_part(s: &str) -> Option<(String, String)> {
+        let parts: Vec<&str> = s.trim().splitn(2, ':').collect();
+        if parts.len() == 2 {
+            Some((parts[0].trim().to_string(), parts[1].trim().to_string()))
+        } else {
+            None
+        }
+    }
+
+
 }
 
 impl std::fmt::Display for DeploymentMode {
