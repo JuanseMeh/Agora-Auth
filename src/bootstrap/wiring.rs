@@ -22,11 +22,13 @@ use crate::core::usecases::ports::{
     ExternalTokenValidator, 
     PasswordHasher, 
     ServiceRegistry, 
-    TokenService
+    TokenService,
+    UserServiceClient,
 };
 
 use crate::adapters::crypto::token::EddsaKey;
 use super::config::{AuthConfig, TokenAlgorithm};
+use crate::adapters::clients::user_service::{UserServiceHttpClient, UserServiceHttpClientConfig};
 
 /// Container for all initialized application components.
 ///
@@ -99,10 +101,19 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
     let google_code_exchanger = Arc::new(
         crate::adapters::clients::google::GoogleCodeExchanger::new(
             exchanger_config,
-            http_client,
+            http_client.clone(),
             google_token_validator.clone(),
         )
     ) as Arc<dyn ExchangeAuthorizationCode + Send + Sync>;
+
+    // Create user service client
+    tracing::info!("Initializing user service client...");
+    let user_service_config = UserServiceHttpClientConfig {
+        base_url: config.user_service.base_url.clone(),
+    };
+    let user_service_client = Arc::new(
+        UserServiceHttpClient::new(user_service_config, http_client)
+    ) as Arc<dyn UserServiceClient + Send + Sync>;
     
     // Step 5: Build HTTP application state
     tracing::info!("Building HTTP state...");
@@ -117,6 +128,7 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
         google_token_validator.clone(),
         google_code_exchanger,
         Arc::new(external_identity_repo),
+        user_service_client,
     );
     
     tracing::info!("Component initialization complete");
@@ -265,6 +277,7 @@ fn build_app_state(
     google_token_validator: Arc<dyn ExternalTokenValidator + Send + Sync>,
     google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
     external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
+    user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
 ) -> AppState {
         AppState::new(
             identity_repo,
@@ -276,6 +289,7 @@ fn build_app_state(
             google_token_validator,
             google_code_exchanger.clone(),
             external_identity_repo,
+            user_service_client,
             config.crypto.access_token_ttl_mins * 60, // Convert to seconds
             config.crypto.refresh_token_ttl_days,
             true, // rotate_refresh_tokens
