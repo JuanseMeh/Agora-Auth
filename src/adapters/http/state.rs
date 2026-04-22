@@ -1,6 +1,7 @@
 // HTTP server shared state
 
 use std::sync::Arc;
+use crate::core::usecases::ports::UserServiceClient;
 use crate::core::usecases::ports::{
     CredentialRepository, 
     ExchangeAuthorizationCode,
@@ -48,6 +49,8 @@ pub struct AppState {
     pub google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
     /// External identity repository for OAuth linking
     pub external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
+    /// User service client for registering users from Google OAuth
+    pub user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
 }
 
 impl AppState {
@@ -62,6 +65,7 @@ impl AppState {
         google_token_validator: Arc<dyn ExternalTokenValidator + Send + Sync>,
         google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
         external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
+        user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
         access_token_ttl_seconds: u64,
         refresh_token_ttl_days: u64,
         rotate_refresh_tokens: bool,
@@ -77,6 +81,7 @@ impl AppState {
             google_token_validator,
             google_code_exchanger,
             external_identity_repo,
+            user_service_client,
             access_token_ttl_seconds,
             refresh_token_ttl_days,
             rotate_refresh_tokens,
