@@ -9,7 +9,13 @@ use axum::{
 use tower::ServiceExt;
 use std::sync::Arc;
 use futures::future::BoxFuture;
-use crate::core::usecases::ports::{CredentialRepository, PasswordHasher, ServiceRegistry, ExternalTokenValidator};
+use crate::core::usecases::ports::{
+    CredentialRepository, 
+    PasswordHasher, 
+    ServiceRegistry, 
+    ExternalTokenValidator, 
+    UserServiceClient
+};
 use crate::core::credentials::StoredCredential;
 
 use uuid::Uuid;
@@ -47,7 +53,10 @@ impl ExchangeAuthorizationCode for MockCodeExchanger {
             let provider = "google".to_string();
             let provider_user_id = "google_sub_123".to_string();
             let email = Some("test@example.com".to_string());
-            Ok(ExternalIdentity::new(provider, provider_user_id, email).unwrap())
+            let name = None;
+            let family_name = None;
+            let picture = None;
+            Ok(ExternalIdentity::new(provider, provider_user_id, email, name, family_name, picture).unwrap())
         })
     }
 }
@@ -99,14 +108,31 @@ impl ServiceRegistry for MockServiceRegistryImpl {
 }
 
 #[derive(Clone)]
+struct MockUserServiceClient;
+
+impl UserServiceClient for MockUserServiceClient {
+    fn register_google_user(
+        &self,
+        _request: crate::core::usecases::ports::user_service_client::RegisterGoogleUserRequest,
+    ) -> BoxFuture<'static, Result<Uuid, CoreError>> {
+        Box::pin(async {
+            Ok(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap())
+        })
+    }
+}
+
+#[derive(Clone)]
 struct MockGoogleTokenValidator;
 impl ExternalTokenValidator for MockGoogleTokenValidator {
     fn validate(&self, _token: &str) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
         let provider = "google".to_string();
         let provider_user_id = "mock_google_user".to_string();
         let email = Some("mock@example.com".to_string());
+        let name = None;
+        let family_name = None;
+        let picture = None;
         Box::pin(async move {
-            Ok(ExternalIdentity::new(provider, provider_user_id, email).unwrap())
+            Ok(ExternalIdentity::new(provider, provider_user_id, email, name, family_name, picture).unwrap())
         })
     }
 }
@@ -118,6 +144,7 @@ fn test_app_state(
     identity_repo: Arc<dyn IdentityRepository + Send + Sync>,
     session_repo: Arc<dyn SessionRepository + Send + Sync>,
     token_service: Arc<dyn TokenService + Send + Sync>,
+    user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
 ) -> AppState {
     AppState::new(
         identity_repo,
@@ -129,6 +156,7 @@ fn test_app_state(
         Arc::new(MockGoogleTokenValidator),
         google_code_exchanger,
         external_identity_repo,
+        user_service_client,
         3600, // access_token_ttl_seconds
         7,    // refresh_token_ttl_days
         true, // rotate_refresh_tokens
@@ -246,6 +274,7 @@ impl TokenService for MockTokenService {
     }
 }
 
+
 // ============================================================================
 // Integration Tests
 // ============================================================================
@@ -258,6 +287,7 @@ async fn test_exchange_google_code_happy_path() {
         Arc::new(MockIdentityRepo) as Arc<dyn IdentityRepository + Send + Sync>,
         Arc::new(MockSessionRepo) as Arc<dyn SessionRepository + Send + Sync>,
         Arc::new(MockTokenService) as Arc<dyn TokenService + Send + Sync>,
+        Arc::new(MockUserServiceClient) as Arc<dyn UserServiceClient + Send + Sync>,
     );
 
     let app = Router::new()
@@ -297,6 +327,7 @@ async fn test_exchange_google_code_invalid_request() {
         Arc::new(MockIdentityRepo) as Arc<dyn IdentityRepository + Send + Sync>,
         Arc::new(MockSessionRepo) as Arc<dyn SessionRepository + Send + Sync>,
         Arc::new(MockTokenService) as Arc<dyn TokenService + Send + Sync>,
+        Arc::new(MockUserServiceClient) as Arc<dyn UserServiceClient + Send + Sync>,
     );
 
 
@@ -327,6 +358,7 @@ async fn test_exchange_google_code_exchange_fail() {
         Arc::new(MockIdentityRepo) as Arc<dyn IdentityRepository + Send + Sync>,
         Arc::new(MockSessionRepo) as Arc<dyn SessionRepository + Send + Sync>,
         Arc::new(MockTokenService) as Arc<dyn TokenService + Send + Sync>,
+        Arc::new(MockUserServiceClient) as Arc<dyn UserServiceClient + Send + Sync>,
     );
 
 
@@ -361,7 +393,7 @@ impl ExchangeAuthorizationCode for MockNoLinkExchanger {
         let _code = code.to_owned();
         let _state = state_opt.map(|s| s.to_owned());
         Box::pin(async move {
-            Ok(ExternalIdentity::new("google".to_string(), "no_link_sub".to_string(), None).unwrap())
+            Ok(ExternalIdentity::new("google".to_string(), "no_link_sub".to_string(), None, None, None, None).unwrap())
         })
     }
 }
@@ -376,6 +408,7 @@ async fn test_exchange_google_code_no_linked_user() {
         Arc::new(MockIdentityRepo) as Arc<dyn IdentityRepository + Send + Sync>,
         Arc::new(MockSessionRepo) as Arc<dyn SessionRepository + Send + Sync>,
         Arc::new(MockTokenService) as Arc<dyn TokenService + Send + Sync>,
+        Arc::new(MockUserServiceClient) as Arc<dyn UserServiceClient + Send + Sync>,
     );
 
     let app = Router::new()

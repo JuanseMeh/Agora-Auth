@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use crate::adapters::http::state::AppState;
 use crate::core::usecases::ports::{
     IdentityRepository, CredentialRepository, SessionRepository, TokenService, PasswordHasher, ServiceRegistry,
-    ExternalTokenValidator, ExchangeAuthorizationCode, ExternalIdentityRepository,
+    ExternalTokenValidator, ExchangeAuthorizationCode, ExternalIdentityRepository, UserServiceClient,
 };
 
 use crate::core::identity::{UserIdentity, ExternalIdentity};
@@ -161,7 +161,25 @@ impl ExternalTokenValidator for MockExternalTokenValidator {
                 provider: "google".to_string(),
                 provider_user_id: "test123".to_string(),
                 email: Some("test@example.com".to_string()),
+                name: None,
+                family_name: None,
+                picture: None,
             })
+        })
+    }
+}
+
+
+#[derive(Clone)]
+struct MockUserServiceClient;
+
+impl UserServiceClient for MockUserServiceClient {
+    fn register_google_user(
+        &self,
+        _request: crate::core::usecases::ports::user_service_client::RegisterGoogleUserRequest,
+    ) -> BoxFuture<'static, Result<Uuid, CoreError>> {
+        Box::pin(async {
+            Ok(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap())
         })
     }
 }
@@ -173,6 +191,9 @@ impl ExchangeAuthorizationCode for MockExchangeAuthorizationCode {
                 provider: "google".to_string(),
                 provider_user_id: "test123".to_string(),
                 email: Some("test@example.com".to_string()),
+                name: None,
+                family_name: None,
+                picture: None,
             })
         })
     }
@@ -218,6 +239,7 @@ fn test_app_state_creation() {
         Arc::new(MockExternalTokenValidator),
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
+        Arc::new(MockUserServiceClient),
         3600u64,
         7u64,
         true,
@@ -243,6 +265,7 @@ fn test_app_state_clone() {
         Arc::new(MockExternalTokenValidator),
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
+        Arc::new(MockUserServiceClient),
         3600u64,
         7u64,
         true,
@@ -271,6 +294,7 @@ fn test_app_state_default_token_ttls() {
         Arc::new(MockExternalTokenValidator),
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
+        Arc::new(MockUserServiceClient),
         900u64,
         1u64,
         false,
@@ -296,6 +320,7 @@ fn test_app_state_long_lived_tokens() {
         Arc::new(MockExternalTokenValidator),
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
+        Arc::new(MockUserServiceClient),
         86400u64,
         30u64,
         true,
