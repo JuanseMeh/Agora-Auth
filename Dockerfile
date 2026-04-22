@@ -39,18 +39,8 @@ WORKDIR /app
 # Copy the built binary from builder
 COPY --from=builder /app/target/release/auth /usr/local/bin/auth
 
-# Copy .env file for default configuration (will be overridden by env vars)
-COPY --chown=appuser:appuser .env /app/.env
-
 # Switch to non-root user
 USER appuser
-
-# Expose the application port
-EXPOSE $AUTH_SERVER_PORT
-
-# Set environment variables for production
-ENV RUST_LOG=info
-ENV AUTH_MODE=production
 
 # Run the application
 CMD ["auth"]

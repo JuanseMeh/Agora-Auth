@@ -25,6 +25,13 @@ pub struct GoogleOAuthConfig {
     pub token_url: String,
 }
 
+/// User service HTTP client configuration
+#[derive(Debug, Clone)]
+pub struct UserServiceConfig {
+    /// Base URL of user_service (e.g., http://user-service:8080)
+    pub base_url: String,
+}
+
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
     /// Server binding configuration
@@ -39,6 +46,8 @@ pub struct AuthConfig {
     pub service_auth: ServiceAuthConfig,
     /// Google OAuth2 configuration
     pub google_oauth: GoogleOAuthConfig,
+    /// User service configuration
+    pub user_service: UserServiceConfig,
     /// Operational mode (development, production, test)
     pub mode: DeploymentMode,
 }
@@ -190,6 +199,9 @@ impl AuthConfig {
                 issuer: Self::get_env("GOOGLE_ISSUER", "https://accounts.google.com"),
                 jwks_url: Self::get_env("GOOGLE_JWKS_URL", "https://www.googleapis.com/oauth2/v3/certs"),
                 token_url: Self::get_env("GOOGLE_TOKEN_URL", "https://oauth2.googleapis.com/token"),
+            },
+            user_service: UserServiceConfig {
+                base_url: Self::require_env("AUTH_USER_SERVICE_BASE_URL")?,
             },
             mode,
         };
@@ -441,6 +453,15 @@ impl std::fmt::Display for DeploymentMode {
             DeploymentMode::Production => write!(f, "production"),
             DeploymentMode::Test => write!(f, "test"),
         }
+    }
+}
+
+impl UserServiceConfig {
+    /// Parse from environment variables
+    pub fn from_env() -> anyhow::Result<Self> {
+        Ok(Self {
+            base_url: AuthConfig::require_env("AUTH_USER_SERVICE_BASE_URL")?,
+        })
     }
 }
 

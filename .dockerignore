@@ -16,6 +16,9 @@ target/
 *.md
 !README.md
 
+# Configuration files
+*.env
+
 # Test files
 *_test.rs
 /tests/
