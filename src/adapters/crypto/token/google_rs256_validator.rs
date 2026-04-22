@@ -6,7 +6,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use futures::future::BoxFuture;
 use jsonwebtoken::{decode_header, decode, Algorithm, DecodingKey, Validation};
-use pkcs1::EncodeRsaPublicKey; // ✅ PKCS#1, not PKCS#8
+use pkcs1::EncodeRsaPublicKey;
 use crate::core::error::TokenError;
 
 use crate::core::identity::ExternalIdentity;
@@ -23,16 +23,16 @@ pub struct GoogleRs256Validator {
 }
 
 #[derive(Debug, serde::Deserialize)]
-#[allow(dead_code)] /* JWT payload
-    └─► serde deserializes into GoogleClaims   ← compiler sees fields written here
-            ├─ iss, aud, exp  (validated internally by jsonwebtoken's Validation)
-            └─ sub, email     (read by the code)  ← compiler sees these read */
+#[allow(dead_code)]
 struct GoogleClaims {
     iss: String,
     aud: String,
     sub: String,
     exp: usize,
     email: Option<String>,
+    name: Option<String>,
+    family_name: Option<String>,
+    picture: Option<String>,
 }
 
 impl GoogleRs256Validator {
@@ -101,6 +101,9 @@ impl ExternalTokenValidator for GoogleRs256Validator {
                 "google".to_string(),
                 token_data.claims.sub.clone(),
                 token_data.claims.email.clone(),
+                token_data.claims.name.clone(),
+                token_data.claims.family_name.clone(),
+                token_data.claims.picture.clone(),
             )
             .map_err(|e| CoreError::Token(TokenError::InvalidClaims { reason: e.to_string() }))
         })
