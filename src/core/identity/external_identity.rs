@@ -18,10 +18,13 @@ pub struct ExternalIdentity {
     /// Email (if provided by provider)
     pub email: Option<String>,
     /// Name (Optional non stored field)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
     /// Family name (Optional non stored field)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub family_name: Option<String>,
     /// Picture URL (Optional non stored field)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub picture: Option<String>,
 }
 
