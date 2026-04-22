@@ -58,6 +58,9 @@ pub async fn initialize_test_components() -> anyhow::Result<AppComponents> {
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
+        },
         mode: DeploymentMode::Test,
     };
     

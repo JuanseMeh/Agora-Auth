@@ -144,6 +144,9 @@ fn test_auth_config_validation_valid() {
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
+        },
         mode: DeploymentMode::Production,
     };
     
@@ -195,6 +198,9 @@ fn test_auth_config_validation_invalid_ttl() {
             issuer: "https://accounts.google.com".to_string(),
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
+        },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
         },
         mode: DeploymentMode::Production,
     };
@@ -251,6 +257,9 @@ fn test_auth_config_validation_short_signing_key() {
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
+        },
         mode: DeploymentMode::Production,
     };
     
@@ -305,6 +314,9 @@ fn test_auth_config_validation_zero_max_attempts() {
             issuer: "https://accounts.google.com".to_string(),
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
+        },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
         },
         mode: DeploymentMode::Production,
     };
@@ -361,6 +373,9 @@ fn test_auth_config_validation_production_requirements() {
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
+        },
         mode: DeploymentMode::Production,
     };
     
@@ -416,6 +431,9 @@ fn test_auth_config_validation_development_allows_lower_security() {
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
         },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
+        },
         mode: DeploymentMode::Development,
     };
     
@@ -467,6 +485,9 @@ fn test_auth_config_validation_empty_service_keys() {
             issuer: "https://accounts.google.com".to_string(),
             jwks_url: "https://www.googleapis.com/oauth2/v3/certs".to_string(),
             token_url: "https://oauth2.googleapis.com/token".to_string(),
+        },
+        user_service: crate::bootstrap::config::UserServiceConfig {
+            base_url: "http://localhost:8083".to_string(),
         },
         mode: DeploymentMode::Production,
     };
