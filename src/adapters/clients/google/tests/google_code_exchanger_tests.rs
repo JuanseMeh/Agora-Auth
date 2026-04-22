@@ -62,6 +62,7 @@ async fn test_exchange_happy_path() {
                     "google".to_string(),
                     "test_sub".to_string(),
                     Some("test@example.com".to_string()),
+                    None, None, None
                 ).unwrap()
             )
         }));

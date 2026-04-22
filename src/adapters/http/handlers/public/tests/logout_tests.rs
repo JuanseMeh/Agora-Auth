@@ -32,6 +32,7 @@ async fn test_logout_missing_both_session_and_token() {
         Arc::new(MockTokenService),
         Arc::new(MockTokenService),
         Arc::new(MockIdentityRepo),
+        Arc::new(MockUserServiceClient),
         3600,  // access_token_ttl_seconds
         30,    // refresh_token_ttl_days
         true,  // rotate_refresh_tokens
@@ -78,6 +79,7 @@ let state = AppState::new(
         Arc::new(MockTokenService),
         Arc::new(MockTokenService),
         Arc::new(MockIdentityRepo),
+        Arc::new(MockUserServiceClient),
         3600,
         30,
         true,
@@ -113,7 +115,7 @@ let state = AppState::new(
 use crate::core::usecases::ports::{
     IdentityRepository, CredentialRepository, PasswordHasher, TokenService, 
     SessionRepository, ServiceRegistry,
-    ExternalTokenValidator, ExchangeAuthorizationCode, ExternalIdentityRepository
+    ExternalTokenValidator, ExchangeAuthorizationCode, ExternalIdentityRepository, UserServiceClient,
 };
 use crate::core::identity::{UserIdentity};
 use crate::core::credentials::StoredCredential;
@@ -165,6 +167,20 @@ impl ExternalIdentityRepository for MockIdentityRepo {
 
     fn delete(&self, _provider: &str, _provider_user_id: &str) -> BoxFuture<'_, Result<(), anyhow::Error>> {
         Box::pin(async move { Ok(()) })
+    }
+}
+
+#[derive(Clone)]
+struct MockUserServiceClient;
+
+impl UserServiceClient for MockUserServiceClient {
+    fn register_google_user(
+        &self,
+        _request: crate::core::usecases::ports::user_service_client::RegisterGoogleUserRequest,
+    ) -> BoxFuture<'static, Result<Uuid, CoreError>> {
+        Box::pin(async {
+            Ok(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440001").unwrap())
+        })
     }
 }
 
@@ -239,7 +255,7 @@ impl TokenService for MockTokenService {
 impl ExternalTokenValidator for MockTokenService {
     fn validate(&self, _token: &str) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
         Box::pin(async move {
-            ExternalIdentity::new("mock_provider".to_string(), "mock_external_id".to_string(), None)
+            ExternalIdentity::new("mock_provider".to_string(), "mock_external_id".to_string(), None, None, None, None)
         })
     }
 }
@@ -247,7 +263,7 @@ impl ExternalTokenValidator for MockTokenService {
 impl ExchangeAuthorizationCode for MockTokenService {
     fn exchange(&self, _code: &str, _state: Option<&str>) -> BoxFuture<'static, Result<ExternalIdentity, CoreError>> {
         Box::pin(async move {
-            Ok(ExternalIdentity::new("mock_provider".to_string(), "mock_external_id".to_string(), None)?)
+            Ok(ExternalIdentity::new("mock_provider".to_string(), "mock_external_id".to_string(), None, None, None, None)?)
         })
     }
 }
