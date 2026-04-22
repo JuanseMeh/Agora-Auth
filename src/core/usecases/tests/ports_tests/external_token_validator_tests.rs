@@ -15,6 +15,9 @@ impl ExternalTokenValidator for MockValidator {
                 provider: "google".to_string(),
                 provider_user_id: "123456".to_string(),
                 email: Some("user@example.com".to_string()),
+                name: None,
+                family_name: None,
+                picture: None,
             };
             Box::pin(future::ok(identity))
         } else {
