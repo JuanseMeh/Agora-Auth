@@ -229,11 +229,11 @@ impl IdentityRepository for MockIdentityRepo {
 #[derive(Clone)]
 struct MockSessionRepo;
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, session_id: &str, _user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> BoxFuture<'static, ()> {
+    fn create_session(&self, session_id: &str, _user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> BoxFuture<'_, Result<(), CoreError>> {
         let _session_id = session_id.to_owned();
         let _refresh_token_hash = refresh_token_hash.to_owned();
         let _metadata = metadata.to_owned();
-        Box::pin(async move {})
+        Box::pin(async move { Ok(()) })
     }
     fn find_by_refresh_token_hash(&self, _hash: &str) -> BoxFuture<'_, Option<crate::core::usecases::ports::session_repository::Session>> {
         Box::pin(async { None })

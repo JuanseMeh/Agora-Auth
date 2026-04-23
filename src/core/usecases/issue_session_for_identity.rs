@@ -130,8 +130,8 @@ impl<'a> IssueSessionForIdentity<'a> {
 
         // Step 7: Persist session
         self.session_repository
-            .create_session(&session_id, &identity, &refresh_token_hash, &metadata)
-            .await;
+        .create_session(&session_id, &identity, &refresh_token_hash, &metadata)
+        .await?;
 
         tracing::info!(
             "[ISSUE_SESSION_FOR_IDENTITY] Session created successfully for user: {}",

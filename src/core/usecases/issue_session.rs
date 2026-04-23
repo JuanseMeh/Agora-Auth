@@ -106,7 +106,7 @@ impl<'a> IssueSession<'a> {
             &input.user,
             &refresh_token_hash,
             &self.build_session_metadata(&input),
-        ).await;
+        ).await?;
         
         tracing::debug!("[ISSUE] Session created successfully");
 
