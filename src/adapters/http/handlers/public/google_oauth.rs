@@ -10,9 +10,9 @@ use crate::adapters::http::error::{
 use crate::adapters::http::router::CleanJson;
 use crate::adapters::http::state::AppState;
 use crate::core::error::CoreError;
-use crate::core::usecases::issue_session_for_identity::{
-    IssueSessionForIdentity, IssueSessionForIdentityInput,
-};
+    use crate::core::usecases::issue_session_for_external_identity::{
+        IssueSessionForExternalIdentity, IssueSessionForExternalIdentityInput,
+    };
 use crate::core::usecases::ports::user_service_client::RegisterGoogleUserRequest;
 
 /// Exchange Google OAuth authorization code for session tokens.
@@ -104,9 +104,8 @@ pub async fn exchange_google_code(
         }
     };
 
-    // Step 5: Issue session — same path for both login and registration
-    let issue_usecase = IssueSessionForIdentity::new(
-        &*state.identity_repo,
+    // Step 5: Issue session — no identity_credential lookup needed for external users
+    let issue_usecase = IssueSessionForExternalIdentity::new(
         &*state.session_repo,
         &*state.token_service,
         state.access_token_ttl_seconds,
@@ -114,8 +113,8 @@ pub async fn exchange_google_code(
     );
 
     let issue_output = issue_usecase
-        .execute(IssueSessionForIdentityInput {
-            user_id: user_id.to_string(),
+        .execute(IssueSessionForExternalIdentityInput {
+            user_id,       // already a Uuid from both branches
             issued_by_service_id: None,
         })
         .await
