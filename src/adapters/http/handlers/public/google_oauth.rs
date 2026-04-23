@@ -10,9 +10,9 @@ use crate::adapters::http::error::{
 use crate::adapters::http::router::CleanJson;
 use crate::adapters::http::state::AppState;
 use crate::core::error::CoreError;
-    use crate::core::usecases::issue_session_for_external_identity::{
-        IssueSessionForExternalIdentity, IssueSessionForExternalIdentityInput,
-    };
+use crate::core::usecases::issue_session_for_external_identity::{
+    IssueSessionForExternalIdentity, IssueSessionForExternalIdentityInput,
+};
 use crate::core::usecases::ports::user_service_client::RegisterGoogleUserRequest;
 
 /// Exchange Google OAuth authorization code for session tokens.
@@ -24,10 +24,13 @@ pub async fn exchange_google_code(
     State(state): State<AppState>,
     CleanJson(request): CleanJson<GoogleCodeExchangeRequest>,
 ) -> Result<(StatusCode, Json<GoogleCodeExchangeResponse>), HttpError> {
+    tracing::info!("[GOOGLE_OAUTH] Starting Google code exchange");
+
     // Step 1: Validate DTO
     request
         .validate()
         .map_err(|e| HttpError::Validation(ValidationError::new(e)))?;
+    tracing::debug!("[GOOGLE_OAUTH] Step 1 - DTO validated successfully");
 
     // Step 2: Exchange OAuth code → ExternalIdentity
     let identity = state
@@ -43,6 +46,12 @@ pub async fn exchange_google_code(
                 e
             ))),
         })?;
+    tracing::info!(
+        provider = %identity.provider,
+        provider_user_id = %identity.provider_user_id,
+        email = ?identity.email,
+        "[GOOGLE_OAUTH] Step 2 - Code exchanged, identity received"
+    );
 
     // Step 3: Check if this Google identity is already linked to an internal user
     let existing_user_id = state
@@ -59,10 +68,15 @@ pub async fn exchange_google_code(
     // Step 4: Login branch or registration branch
     let user_id = match existing_user_id {
         // Login — identity already linked, continue directly to session issuance
-        Some(id) => id,
+        Some(id) => {
+            tracing::info!(user_id = %id, "[GOOGLE_OAUTH] Step 3/4 - Existing identity found, login branch");
+            id
+        }
 
         // Registration — new user, delegate creation to user_service
         None => {
+            tracing::info!("[GOOGLE_OAUTH] Step 3/4 - No existing identity, registration branch");
+
             // Step 4a: Ask user_service to create the user, receive their UUID back
             let new_user_id = state
                 .user_service_client
@@ -82,6 +96,7 @@ pub async fn exchange_google_code(
                         e
                     ))),
                 })?;
+            tracing::info!(user_id = %new_user_id, "[GOOGLE_OAUTH] Step 4a - User registered via user_service");
 
             // Step 4b: Upsert external identity link in auth's own DB
             state
@@ -99,6 +114,7 @@ pub async fn exchange_google_code(
                         e
                     )))
                 })?;
+            tracing::info!("[GOOGLE_OAUTH] Step 4b - External identity linked in auth DB");
 
             new_user_id
         }
@@ -127,6 +143,11 @@ pub async fn exchange_google_code(
                 e
             ))),
         })?;
+    tracing::info!(
+        session_id = %issue_output.session_id,
+        user_id = %user_id,
+        "[GOOGLE_OAUTH] Step 5 - Session issued successfully"
+    );
 
     Ok((
         StatusCode::OK,
