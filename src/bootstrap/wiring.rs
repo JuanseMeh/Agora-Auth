@@ -114,6 +114,10 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
     let user_service_client = Arc::new(
         UserServiceHttpClient::new(user_service_config, http_client)
     ) as Arc<dyn UserServiceClient + Send + Sync>;
+    tracing::info!(
+        base_url = %config.user_service.base_url,
+        "[BOOTSTRAP] User service client loaded successfully"
+    );
     
     // Step 5: Build HTTP application state
     tracing::info!("Building HTTP state...");
