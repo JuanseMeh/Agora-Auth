@@ -46,8 +46,8 @@ impl MockSessionRepo {
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _session_id: &str, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
-        Box::pin(async move {})
+    fn create_session(&self, _session_id: &str, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, Result<(), CoreError>> {
+        Box::pin(async move { Ok(()) })
     }
     
     fn find_by_refresh_token_hash(&self, hash: &str) -> BoxFuture<'_, Option<SessionType>> {

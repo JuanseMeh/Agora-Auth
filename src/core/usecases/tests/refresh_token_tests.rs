@@ -2,6 +2,7 @@
 
 use futures::future::BoxFuture;
 use super::super::refresh_session::{RefreshSession, RefreshSessionInput};
+use crate::core::error::CoreError;
 use crate::core::token::Token;
 use crate::core::usecases::ports::{SessionRepository, TokenService};
 use crate::core::usecases::ports::session_repository::Session as SessionType;
@@ -58,9 +59,9 @@ impl MockSessionRepo {
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _session_id: &str, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+    fn create_session(&self, _session_id: &str, _user: &crate::core::identity::UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, Result<(), CoreError>> {
         // Not used in refresh tests
-        Box::pin(async move {})
+        Box::pin(async move { Ok(()) })
     }
     
     fn find_by_refresh_token_hash(&self, hash: &str) -> BoxFuture<'_, Option<SessionType>> {
