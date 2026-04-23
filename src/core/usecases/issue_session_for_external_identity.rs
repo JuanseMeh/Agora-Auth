@@ -94,7 +94,7 @@ impl<'a> IssueSessionForExternalIdentity<'a> {
         // Persist session
         self.session_repository
             .create_session(&session_id, &identity, &refresh_token_hash, &metadata)
-            .await;
+            .await?;
 
         tracing::info!(
             "[ISSUE_SESSION_FOR_EXTERNAL_IDENTITY] Session created for user_id={}",
