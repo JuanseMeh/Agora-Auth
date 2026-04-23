@@ -87,12 +87,12 @@ impl SessionRepository for MockSessionRepository {
         _user: &UserIdentity,
         refresh_token_hash: &str,
         _metadata: &str,
-    ) -> BoxFuture<'_, ()> {
+    ) -> BoxFuture<'_, Result<(), CoreError>> {
         self.sessions
             .write()
             .unwrap()
             .insert(session_id.to_string(), refresh_token_hash.to_string());
-        Box::pin(async move {})
+        Box::pin(async move { Ok(()) })
     }
 
     fn find_by_refresh_token_hash(&self, _hash: &str) -> BoxFuture<'_, Option<Session>> {

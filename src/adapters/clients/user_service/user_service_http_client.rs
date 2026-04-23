@@ -6,6 +6,7 @@
 use futures::future::BoxFuture;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::core::error::{AuthenticationError, CoreError};
@@ -57,6 +58,8 @@ impl UserServiceClient for UserServiceHttpClient {
         };
 
         Box::pin(async move {
+            info!("[USER_SERVICE] Sending registration request to {}", url);
+
             let response = self
                 .http_client
                 .post(&url)
@@ -64,6 +67,7 @@ impl UserServiceClient for UserServiceHttpClient {
                 .send()
                 .await
                 .map_err(|e| {
+                    warn!("[USER_SERVICE] Request failed: {}", e);
                     CoreError::Authentication(AuthenticationError::IncompleteFlow {
                         stage: format!("user_service unreachable: {}", e),
                     })
@@ -72,6 +76,10 @@ impl UserServiceClient for UserServiceHttpClient {
             let status = response.status();
 
             if status.is_client_error() || status.is_server_error() {
+                warn!(
+                    status = %status,
+                    "[USER_SERVICE] Registration failed with error status"
+                );
                 return Err(CoreError::Authentication(
                     AuthenticationError::IncompleteFlow {
                         stage: format!(
@@ -84,12 +92,15 @@ impl UserServiceClient for UserServiceHttpClient {
 
             let body: RegisterGoogleUserResponse =
                 response.json().await.map_err(|e| {
+                    warn!("[USER_SERVICE] Response parse failed: {}", e);
                     CoreError::Authentication(AuthenticationError::IncompleteFlow {
                         stage: format!("user_service response parse failed: {}", e),
                     })
                 })?;
 
+            info!(user_id = %body.user_id, "[USER_SERVICE] User registered successfully");
             Ok(body.user_id)
         })
     }
 }
+

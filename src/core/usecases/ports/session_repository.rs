@@ -6,6 +6,7 @@
 
 use futures::future::BoxFuture;
 use crate::core::identity::UserIdentity;
+use crate::core::error::CoreError;
 
 /// Opaque session type for use case contracts (to be defined in usecases).
 pub struct Session {/* fields omitted for now */}
@@ -19,13 +20,18 @@ pub trait SessionRepository: Send + Sync {
 	/// * `user` - The user identity
 	/// * `refresh_token_hash` - Hash of the refresh token
 	/// * `metadata` - Session metadata JSON
-	fn create_session(&self, session_id: &str, user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> BoxFuture<'_, ()>;
+	fn create_session(
+        &self,
+        session_id: &str,
+        user: &UserIdentity,
+        refresh_token_hash: &str,
+        metadata: &str,
+    ) -> BoxFuture<'_, Result<(), CoreError>>;
 	
 	/// Find a session by refresh token hash.
 	fn find_by_refresh_token_hash(&self, hash: &str) -> BoxFuture<'_, Option<Session>>;
 
 	/// Find a session by session ID.
-	/// 
 	/// Returns the session only if it is not revoked and not expired.
 	fn find_by_id(&self, session_id: &str) -> BoxFuture<'_, Option<Session>>;
 

@@ -2,6 +2,7 @@
 
 use futures::future::BoxFuture;
 use super::super::issue_session::{IssueSession, IssueSessionInput};
+use crate::core::error::CoreError;
 use crate::core::identity::UserIdentity;
 use crate::core::token::Token;
 use crate::core::usecases::ports::{SessionRepository, TokenService};
@@ -28,9 +29,9 @@ impl MockSessionRepo {
 }
 
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, session_id: &str, _user: &UserIdentity, refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
+    fn create_session(&self, session_id: &str, _user: &UserIdentity, refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, Result<(), CoreError>> {
         self.sessions.write().unwrap().insert(session_id.to_string(), refresh_token_hash.to_string());
-        Box::pin(async move {})
+        Box::pin(async move { Ok(()) })
     }
     
     fn find_by_refresh_token_hash(&self, hash: &str) -> BoxFuture<'_, Option<Session>> {

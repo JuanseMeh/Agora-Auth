@@ -8,6 +8,7 @@ use crate::adapters::persistence::{
     error::{ConstraintError, ExecutionError, PersistenceError},
     models::SessionRow,
 };
+use crate::core::error::CoreError;
 use crate::core::identity::UserIdentity;
 use crate::core::usecases::ports::SessionRepository;
 use crate::core::usecases::session_repository::Session;
@@ -249,23 +250,34 @@ impl SessionRepositorySql {
 }
 
 impl SessionRepository for SessionRepositorySql {
-    fn create_session(&self, session_id: &str, user: &UserIdentity, refresh_token_hash: &str, metadata: &str) -> futures::future::BoxFuture<'_, ()> {
+    fn create_session(
+        &self,
+        session_id: &str,
+        user: &UserIdentity,
+        refresh_token_hash: &str,
+        metadata: &str,
+    ) -> futures::future::BoxFuture<'_, Result<(), CoreError>> {
         let session_id = session_id.to_string();
         let user_id = user.id.clone();
         let refresh_token_hash = refresh_token_hash.to_string();
         let metadata = metadata.to_string();
-        let expires_at = Utc::now() + chrono::Duration::days(7); // Default 7-day session
-        
+        let expires_at = Utc::now() + chrono::Duration::days(7);
+
         async move {
-            let _ = self.create_session(
+            self.create_session(
                 &session_id,
                 &user_id,
                 &refresh_token_hash,
                 expires_at,
-                "0.0.0.0", // Default IP
+                "0.0.0.0",
                 &metadata,
             )
-            .await;
+            .await
+            .map_err(|e| CoreError::Authentication(
+                crate::core::error::AuthenticationError::IncompleteFlow {
+                    stage: format!("session persistence failed: {}", e),
+                }
+            ))
         }
         .boxed()
     }

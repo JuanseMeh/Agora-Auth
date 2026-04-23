@@ -2,6 +2,7 @@
 
 use futures::future::BoxFuture;
 use super::super::validate_access_token::{ValidateAccessToken, ValidateAccessTokenInput};
+use crate::core::error::CoreError;
 use crate::core::token::Token;
 use crate::core::usecases::ports::{TokenService, SessionRepository};
 use crate::core::usecases::ports::session_repository::Session;
@@ -88,8 +89,8 @@ impl TokenService for MockTokenService {
 
 struct MockSessionRepo;
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _session_id: &str, _user: &UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
-        Box::pin(async move {})
+    fn create_session(&self, _session_id: &str, _user: &UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, Result<(), CoreError>> {
+        Box::pin(async move { Ok(()) })
     }
     
     fn find_by_refresh_token_hash(&self, _hash: &str) -> BoxFuture<'_, Option<Session>> {

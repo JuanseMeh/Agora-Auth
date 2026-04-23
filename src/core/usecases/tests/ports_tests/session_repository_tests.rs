@@ -3,14 +3,15 @@
 //! Tests for SessionRepository port.
 
 use futures::future::BoxFuture;
+use crate::core::error::CoreError;
 use crate::core::identity::UserIdentity;
 use crate::core::usecases::ports::SessionRepository;
 use crate::core::usecases::ports::session_repository::Session;
 
 struct MockSessionRepo;
 impl SessionRepository for MockSessionRepo {
-    fn create_session(&self, _session_id: &str, _user: &UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, ()> {
-        Box::pin(async move {})
+    fn create_session(&self, _session_id: &str, _user: &UserIdentity, _refresh_token_hash: &str, _metadata: &str) -> BoxFuture<'_, Result<(), CoreError>> {
+        Box::pin(async move { Ok(()) })
     }
     fn find_by_refresh_token_hash(&self, _hash: &str) -> BoxFuture<'_, Option<Session>> {
         Box::pin(async move { None })
@@ -33,7 +34,7 @@ impl SessionRepository for MockSessionRepo {
 async fn session_repository_create_session() {
     let repo = MockSessionRepo;
     let user = UserIdentity::new("user123");
-    repo.create_session("session123", &user, "hash", "metadata").await;
+    repo.create_session("session123", &user, "hash", "metadata").await.unwrap();
     // No assertion needed, just check method call
 }
 
