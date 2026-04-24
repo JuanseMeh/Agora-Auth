@@ -75,17 +75,23 @@ impl UserServiceClient for UserServiceHttpClient {
 
             let status = response.status();
 
+            if status == reqwest::StatusCode::CONFLICT {
+                // User already exists in user_service — parse the user_id from the response
+                // user_service should return the existing user_id on 409
+                let body: RegisterGoogleUserResponse = response.json().await.map_err(|e| {
+                    CoreError::Authentication(AuthenticationError::IncompleteFlow {
+                        stage: format!("user_service 409 response parse failed: {}", e),
+                    })
+                })?;
+                info!(user_id = %body.user_id, "[USER_SERVICE] User already exists, returning existing id");
+                return Ok(body.user_id);
+            }
+
             if status.is_client_error() || status.is_server_error() {
-                warn!(
-                    status = %status,
-                    "[USER_SERVICE] Registration failed with error status"
-                );
+                warn!(status = %status, "[USER_SERVICE] Registration failed with error status");
                 return Err(CoreError::Authentication(
                     AuthenticationError::IncompleteFlow {
-                        stage: format!(
-                            "user_service registration failed with status: {}",
-                            status
-                        ),
+                        stage: format!("user_service registration failed with status: {}", status),
                     },
                 ));
             }
