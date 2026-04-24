@@ -87,8 +87,8 @@ impl ExternalIdentityRepositorySql {
             RETURNING user_id::uuid
         "#;
 
-        let user_id_str: String = sqlx::query_scalar(QUERY)
-            .bind(&user_id.to_string())
+        let returned_user_id: Uuid = sqlx::query_scalar(QUERY)
+            .bind(user_id)
             .bind(provider)
             .bind(provider_user_id)
             .bind(email)
@@ -107,12 +107,7 @@ impl ExternalIdentityRepositorySql {
                 }
             })?;
 
-        Ok(Uuid::parse_str(&user_id_str).map_err(|e| {
-            PersistenceError::Execution(ExecutionError::query_failed(format!(
-                "invalid user_id from upsert query: {}",
-                e
-            )))
-        })?)
+        Ok(returned_user_id)
     }
 
     /// Delete external identity by provider + provider_user_id.
