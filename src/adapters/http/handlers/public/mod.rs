@@ -1,5 +1,6 @@
 // Public handlers module
 pub mod auth;
+pub mod credential_recovery;
 pub mod logout;
 pub mod tokens;
 pub mod token_validation;
