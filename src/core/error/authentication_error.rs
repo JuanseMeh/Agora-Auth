@@ -42,6 +42,8 @@ pub enum AuthenticationError {
     },
     /// Invalid credentials provided
     InvalidCredentials,
+    /// Invalid recovery token provided
+    InvalidRecoveryToken,
     /// Service is not active or not authorized
     ServiceNotActive,
 }
@@ -153,6 +155,9 @@ fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             }
             Self::InvalidCredentials => {
                 write!(f, "Invalid credentials provided")
+            }
+            Self::InvalidRecoveryToken => {
+                write!(f, "Invalid recovery token provided")
             }
             Self::ServiceNotActive => {
                 write!(f, "Service is not active or not authorized")

@@ -4,6 +4,7 @@ mod raw_credential_tests;
 mod stored_credential_tests;
 mod credential_status_tests;
 mod credential_policy_tests;
+mod recovery_token_tests;
 use super::*;
 
 #[test]

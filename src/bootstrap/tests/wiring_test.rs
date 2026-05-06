@@ -61,6 +61,7 @@ pub async fn initialize_test_components() -> anyhow::Result<AppComponents> {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Test,
     };
     

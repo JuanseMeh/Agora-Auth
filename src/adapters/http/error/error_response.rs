@@ -59,6 +59,7 @@ impl ErrorResponse {
             HttpError::NotFound(e) => Self::not_found(e),
             HttpError::IdentityNotFound(e) => Self::identity_not_found(e),
             HttpError::Locked(e) => Self::locked(e),
+            HttpError::TooManyRequests(e) => Self::too_many_requests(e),
             HttpError::Internal(e) => Self::internal(e),
         }
     }
@@ -178,6 +179,16 @@ impl ErrorResponse {
                 resource_type: None,
                 resource_id: None,
             }),
+        }
+    }
+
+    /// Create a too many requests error response (429)
+    fn too_many_requests(message: &str) -> Self {
+        Self {
+            status: 429,
+            code: "TOO_MANY_REQUESTS".to_string(),
+            message: message.to_string(),
+            details: None,
         }
     }
 }

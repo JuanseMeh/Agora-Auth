@@ -19,6 +19,29 @@ use crate::adapters::http::{
 // Simple Integration Tests
 // ============================================================================
 
+use crate::core::usecases::{
+    request_credential_recovery::RequestCredentialRecovery,
+    confirm_credential_recovery::ConfirmCredentialRecovery,
+};
+use crate::adapters::clients::notification::notification_http_client::NotificationHttpClient;
+
+#[derive(Clone)]
+struct MockRecoveryTokenRepo;
+impl crate::core::usecases::ports::recovery_token_repository::RecoveryTokenRepository for MockRecoveryTokenRepo {
+    fn create(&self, _token: &crate::core::credentials::recovery_token::RecoveryToken) -> BoxFuture<'static, Result<(), CoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn find_by_hash(&self, _hash: &str) -> BoxFuture<'static, Result<Option<crate::core::credentials::recovery_token::RecoveryToken>, CoreError>> {
+        Box::pin(async { Ok(None) })
+    }
+    fn mark_used(&self, _id: Uuid) -> BoxFuture<'static, Result<(), CoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn invalidate_all_for_user(&self, _user_id: Uuid) -> BoxFuture<'static, Result<(), CoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
 #[tokio::test]
 async fn test_logout_missing_both_session_and_token() {
     // Create a minimal state for testing
@@ -33,6 +56,9 @@ async fn test_logout_missing_both_session_and_token() {
         Arc::new(MockTokenService),
         Arc::new(MockIdentityRepo),
         Arc::new(MockUserServiceClient),
+        Arc::new(RequestCredentialRecovery::new(Arc::new(MockIdentityRepo), Arc::new(MockRecoveryTokenRepo))),
+        Arc::new(ConfirmCredentialRecovery::new(Arc::new(MockCredentialRepo), Arc::new(MockRecoveryTokenRepo), Arc::new(MockPasswordHasher))),
+        Arc::new(NotificationHttpClient::new("http://localhost".to_string())),
         3600,  // access_token_ttl_seconds
         30,    // refresh_token_ttl_days
         true,  // rotate_refresh_tokens
@@ -80,6 +106,9 @@ let state = AppState::new(
         Arc::new(MockTokenService),
         Arc::new(MockIdentityRepo),
         Arc::new(MockUserServiceClient),
+        Arc::new(RequestCredentialRecovery::new(Arc::new(MockIdentityRepo), Arc::new(MockRecoveryTokenRepo))),
+        Arc::new(ConfirmCredentialRecovery::new(Arc::new(MockCredentialRepo), Arc::new(MockRecoveryTokenRepo), Arc::new(MockPasswordHasher))),
+        Arc::new(NotificationHttpClient::new("http://localhost".to_string())),
         3600,
         30,
         true,

@@ -16,6 +16,8 @@ pub mod service_registry;
 pub mod external_token_validator;
 pub mod exchange_authorization_code;
 pub mod user_service_client;
+pub mod notification_client;
+pub mod recovery_token_repository;
 
 pub use identity_repository::IdentityRepository;
 pub use external_identity_repository::ExternalIdentityRepository;
@@ -28,4 +30,6 @@ pub use service_registry::ServiceRegistry;
 pub use external_token_validator::{ExternalTokenValidator, ExternalClaims};
 pub use exchange_authorization_code::ExchangeAuthorizationCode;
 pub use user_service_client::{UserServiceClient, RegisterGoogleUserRequest};
+pub use notification_client::{NotificationClient, RecoveryNotificationPayload};
+pub use recovery_token_repository::RecoveryTokenRepository;
 
