@@ -44,11 +44,13 @@
 //! - [`Clock`]
 
 pub mod authenticate_user;
+pub mod confirm_credential_recovery;
 pub mod issue_session;
 pub mod issue_service_token;
 pub mod issue_session_for_identity;
 pub mod issue_session_for_external_identity;
 pub mod refresh_session;
+pub mod request_credential_recovery;
 pub mod revoke_session;
 pub mod validate_access_token;
 
@@ -62,6 +64,9 @@ pub use issue_service_token::*;
 pub use issue_session_for_identity::*;
 pub use issue_session_for_external_identity::*;
 pub use refresh_session::*;
+pub use request_credential_recovery::*;
+pub use confirm_credential_recovery::*;
+
 pub use revoke_session::*;
 pub use validate_access_token::*;
 
