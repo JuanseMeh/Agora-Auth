@@ -22,7 +22,7 @@ pub fn create_router(state: AppState) -> Router {
         // Internal routes - protected (require X-Service-Key header)
         .nest("/internal", protected_internal_routes(state.clone()))
         // Public routes
-        .nest("/public", public_routes())
+        .nest("/public", public_routes(&state))
         // Health check routes
         .nest("/health", health_routes())
         .layer(TraceLayer::new_for_http())

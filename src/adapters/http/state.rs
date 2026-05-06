@@ -13,6 +13,11 @@ use crate::core::usecases::ports::{
     ServiceRegistry, 
     TokenService,
 };
+use crate::adapters::clients::notification::notification_http_client::NotificationHttpClient;
+use crate::core::usecases::{
+    request_credential_recovery::RequestCredentialRecovery,
+    confirm_credential_recovery::ConfirmCredentialRecovery,
+};
 
 /// Application state shared across all HTTP handlers
 ///
@@ -51,6 +56,12 @@ pub struct AppState {
     pub external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
     /// User service client for registering users from Google OAuth
     pub user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
+    /// Use case for requesting credential recovery
+    pub request_recovery: Arc<RequestCredentialRecovery>,
+    /// Use case for confirming credential recovery
+    pub confirm_recovery: Arc<ConfirmCredentialRecovery>,
+    /// Notification client for sending recovery emails
+    pub notification_client: Arc<NotificationHttpClient>,
 }
 
 impl AppState {
@@ -66,6 +77,9 @@ impl AppState {
         google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
         external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
         user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
+        request_recovery: Arc<RequestCredentialRecovery>,
+        confirm_recovery: Arc<ConfirmCredentialRecovery>,
+        notification_client: Arc<NotificationHttpClient>,
         access_token_ttl_seconds: u64,
         refresh_token_ttl_days: u64,
         rotate_refresh_tokens: bool,
@@ -82,6 +96,9 @@ impl AppState {
             google_code_exchanger,
             external_identity_repo,
             user_service_client,
+            request_recovery,
+            confirm_recovery,
+            notification_client,
             access_token_ttl_seconds,
             refresh_token_ttl_days,
             rotate_refresh_tokens,
