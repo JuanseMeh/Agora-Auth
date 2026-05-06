@@ -48,6 +48,8 @@ pub struct AuthConfig {
     pub google_oauth: GoogleOAuthConfig,
     /// User service configuration
     pub user_service: UserServiceConfig,
+    /// Notification service base URL
+    pub notification_service_url: String,
     /// Operational mode (development, production, test)
     pub mode: DeploymentMode,
 }
@@ -203,6 +205,7 @@ impl AuthConfig {
             user_service: UserServiceConfig {
                 base_url: Self::require_env("AUTH_USER_SERVICE_BASE_URL")?,
             },
+            notification_service_url: Self::require_env("NOTIFICATION_SERVICE_URL")?,
             mode,
         };
 

@@ -3,32 +3,31 @@
 //! This module wires together all adapters, repositories, and services
 //! following the dependency graph defined in the bootstrap README.
 
-use std::sync::Arc;
 use reqwest::Client;
+use std::sync::Arc;
 
+use crate::adapters::clients::notification::notification_http_client::NotificationHttpClient;
 use crate::adapters::crypto::password::Argon2PasswordHasher;
 use crate::adapters::crypto::token::{EddsaTokenService, HmacTokenService};
 use crate::adapters::http::state::AppState;
 use crate::adapters::persistence::database::{Database, PoolConfig};
 use crate::adapters::persistence::repositories::{
-    CredentialRepositorySql, 
-    ExternalIdentityRepositorySql,
-    IdentityRepositorySql, 
-    SessionRepositorySql,
+    CredentialRepositorySql, ExternalIdentityRepositorySql, IdentityRepositorySql,
+    RecoveryTokenRepositorySql, SessionRepositorySql,
 };
 use crate::core::usecases::ports::{
-    ExchangeAuthorizationCode,
-    ExternalIdentityRepository,
-    ExternalTokenValidator, 
-    PasswordHasher, 
-    ServiceRegistry, 
-    TokenService,
-    UserServiceClient,
+    ExchangeAuthorizationCode, ExternalIdentityRepository, ExternalTokenValidator, PasswordHasher,
+    ServiceRegistry, TokenService, UserServiceClient, credential_repository::CredentialRepository,
+    identity_repository::IdentityRepository, session_repository::SessionRepository,
+};
+use crate::core::usecases::{
+    confirm_credential_recovery::ConfirmCredentialRecovery,
+    request_credential_recovery::RequestCredentialRecovery,
 };
 
-use crate::adapters::crypto::token::EddsaKey;
 use super::config::{AuthConfig, TokenAlgorithm};
 use crate::adapters::clients::user_service::{UserServiceHttpClient, UserServiceHttpClientConfig};
+use crate::adapters::crypto::token::EddsaKey;
 
 /// Container for all initialized application components.
 ///
@@ -57,23 +56,28 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
     // Step 1: Initialize database pool
     tracing::info!("Initializing database pool...");
     let database = initialize_database(config).await?;
-    
+
     // Step 2: Build repositories (depend on database)
     tracing::info!("Building repositories...");
-    let identity_repo = IdentityRepositorySql::new(database.clone());
-    let credential_repo = CredentialRepositorySql::new(database.clone());
-    let session_repo = SessionRepositorySql::new(database.clone());
-    let external_identity_repo = ExternalIdentityRepositorySql::new(database.clone());
-    
+    let identity_repo = Arc::new(IdentityRepositorySql::new(database.clone()))
+        as Arc<dyn IdentityRepository + Send + Sync>;
+    let credential_repo = Arc::new(CredentialRepositorySql::new(database.clone()))
+        as Arc<dyn CredentialRepository + Send + Sync>;
+    let session_repo = Arc::new(SessionRepositorySql::new(database.clone()))
+        as Arc<dyn SessionRepository + Send + Sync>;
+    let external_identity_repo = Arc::new(ExternalIdentityRepositorySql::new(database.clone()))
+        as Arc<dyn ExternalIdentityRepository + Send + Sync>;
+
     // Step 3: Initialize crypto adapters
     tracing::info!("Initializing crypto adapters...");
-    let password_hasher = initialize_password_hasher(config)?;
+    let password_hasher =
+        Arc::new(initialize_password_hasher(config)?) as Arc<dyn PasswordHasher + Send + Sync>;
     let token_service = initialize_token_service(config)?;
-    
+
     // Step 4: Build service registry for internal auth
     tracing::info!("Building service registry...");
     let service_registry = build_service_registry(config);
-    
+
     // Step 4.5: Create Google OAuth token validator
     tracing::info!("Initializing Google OAuth token validator...");
     let validator_config = crate::adapters::crypto::token::GoogleValidatorConfig::new(
@@ -81,7 +85,9 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
         config.google_oauth.issuer.clone(),
         config.google_oauth.client_id.clone(),
     );
-    let google_token_validator = Arc::new(crate::adapters::crypto::token::GoogleRs256Validator::new(validator_config)) as Arc<dyn ExternalTokenValidator + Send + Sync>;
+    let google_token_validator = Arc::new(
+        crate::adapters::crypto::token::GoogleRs256Validator::new(validator_config),
+    ) as Arc<dyn ExternalTokenValidator + Send + Sync>;
 
     // Create Google code exchanger
     tracing::info!("Initializing Google code exchanger...");
@@ -98,45 +104,65 @@ pub async fn initialize_components(config: &AuthConfig) -> anyhow::Result<AppCom
         max_retries: 3,
     };
 
-    let google_code_exchanger = Arc::new(
-        crate::adapters::clients::google::GoogleCodeExchanger::new(
+    let google_code_exchanger =
+        Arc::new(crate::adapters::clients::google::GoogleCodeExchanger::new(
             exchanger_config,
             http_client.clone(),
             google_token_validator.clone(),
-        )
-    ) as Arc<dyn ExchangeAuthorizationCode + Send + Sync>;
+        )) as Arc<dyn ExchangeAuthorizationCode + Send + Sync>;
 
     // Create user service client
     tracing::info!("Initializing user service client...");
     let user_service_config = UserServiceHttpClientConfig {
         base_url: config.user_service.base_url.clone(),
     };
-    let user_service_client = Arc::new(
-        UserServiceHttpClient::new(user_service_config, http_client)
-    ) as Arc<dyn UserServiceClient + Send + Sync>;
+    let user_service_client = Arc::new(UserServiceHttpClient::new(user_service_config, http_client))
+        as Arc<dyn UserServiceClient + Send + Sync>;
     tracing::info!(
         base_url = %config.user_service.base_url,
         "[BOOTSTRAP] User service client loaded successfully"
     );
-    
+
+    // Step 4.6: Initialize recovery use cases
+    tracing::info!("Initializing recovery components...");
+    let recovery_token_repo = Arc::new(RecoveryTokenRepositorySql::new(database.clone()));
+
+    let notification_client = Arc::new(NotificationHttpClient::new(
+        config.notification_service_url.clone(),
+    ));
+
+    let request_recovery = Arc::new(RequestCredentialRecovery::new(
+        identity_repo.clone(),
+        recovery_token_repo.clone(),
+    ));
+
+    let confirm_recovery = Arc::new(ConfirmCredentialRecovery::new(
+        credential_repo.clone(),
+        recovery_token_repo,
+        password_hasher.clone(),
+    ));
+
     // Step 5: Build HTTP application state
     tracing::info!("Building HTTP state...");
     let app_state = build_app_state(
         config,
-        Arc::new(identity_repo),
-        Arc::new(credential_repo),
-        Arc::new(session_repo),
-        Arc::new(password_hasher),
+        identity_repo,
+        credential_repo,
+        session_repo,
+        password_hasher,
         token_service,
         service_registry,
         google_token_validator.clone(),
         google_code_exchanger,
-        Arc::new(external_identity_repo),
+        external_identity_repo,
         user_service_client,
+        request_recovery,
+        confirm_recovery,
+        notification_client,
     );
-    
+
     tracing::info!("Component initialization complete");
-    
+
     Ok(AppComponents {
         database,
         app_state,
@@ -150,15 +176,16 @@ async fn initialize_database(config: &AuthConfig) -> anyhow::Result<Database> {
         idle_timeout: std::time::Duration::from_secs(600),
         max_lifetime: std::time::Duration::from_secs(1800),
     };
-    
-    let database = Database::new(&config.database.url, pool_config).await
+
+    let database = Database::new(&config.database.url, pool_config)
+        .await
         .map_err(|e| anyhow::anyhow!("Failed to initialize database: {}", e))?;
-    
+
     tracing::info!(
         "Database pool initialized (max_connections={})",
         config.database.max_connections
     );
-    
+
     Ok(database)
 }
 
@@ -169,52 +196,59 @@ fn initialize_password_hasher(config: &AuthConfig) -> anyhow::Result<Argon2Passw
         config.crypto.password_hash_iterations,
         config.crypto.password_hash_parallelism,
         16, // salt length in bytes
-    ).map_err(|e| anyhow::anyhow!("Failed to initialize password hasher: {:?}", e))?;
-    
+    )
+    .map_err(|e| anyhow::anyhow!("Failed to initialize password hasher: {:?}", e))?;
+
     tracing::info!(
         "Password hasher initialized (memory_cost={}KB, iterations={})",
         config.crypto.password_hash_memory_cost,
         config.crypto.password_hash_iterations
     );
-    
+
     Ok(hasher)
 }
 
 /// Initialize token service with signing key (supports both EdDSA and HMAC).
 fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<Arc<dyn TokenService>> {
     use base64::Engine;
-    
+
     match config.crypto.token_algorithm {
         TokenAlgorithm::EdDSA => {
             // EdDSA mode: requires EdDSA keys
-            let private_key_b64 = config.crypto.eddsa_private_key.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("EdDSA private key not configured (AUTH_EDDSA_PRIVATE_KEY)"))?;
-            let public_key_b64 = config.crypto.eddsa_public_key.as_ref()
-                .ok_or_else(|| anyhow::anyhow!("EdDSA public key not configured (AUTH_EDDSA_PUBLIC_KEY)"))?;
-            
+            let private_key_b64 = config.crypto.eddsa_private_key.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("EdDSA private key not configured (AUTH_EDDSA_PRIVATE_KEY)")
+            })?;
+            let public_key_b64 = config.crypto.eddsa_public_key.as_ref().ok_or_else(|| {
+                anyhow::anyhow!("EdDSA public key not configured (AUTH_EDDSA_PUBLIC_KEY)")
+            })?;
+
             let eddsa_key = EddsaKey::from_base64_pair(private_key_b64, public_key_b64)
                 .map_err(|e| anyhow::anyhow!("Failed to load EdDSA key: {}", e))?;
-            
-            let mut token_service = EddsaTokenService::from_key(&eddsa_key)
-                .map_err(|e| anyhow::anyhow!("Failed to initialize EdDSA token service: {:?}", e))?;
-            
+
+            let mut token_service = EddsaTokenService::from_key(&eddsa_key).map_err(|e| {
+                anyhow::anyhow!("Failed to initialize EdDSA token service: {:?}", e)
+            })?;
+
             // Configure service token key if EdDSA service keys are provided
             if let (Some(service_private), Some(service_public)) = (
                 config.service_auth.eddsa_service_private_key.as_ref(),
-                config.service_auth.eddsa_service_public_key.as_ref()
+                config.service_auth.eddsa_service_public_key.as_ref(),
             ) {
                 let service_key = EddsaKey::from_base64_pair(service_private, service_public)
                     .map_err(|e| anyhow::anyhow!("Failed to load EdDSA service key: {}", e))?;
-                token_service = token_service.with_service_token_key(&service_key.as_bytes())
-                    .map_err(|e| anyhow::anyhow!("Failed to set EdDSA service token key: {:?}", e))?;
+                token_service = token_service
+                    .with_service_token_key(&service_key.as_bytes())
+                    .map_err(|e| {
+                        anyhow::anyhow!("Failed to set EdDSA service token key: {:?}", e)
+                    })?;
             }
-            
+
             tracing::info!(
                 "Token service initialized (EdDSA, access_ttl={}m, refresh_ttl={}d)",
                 config.crypto.access_token_ttl_mins,
                 config.crypto.refresh_token_ttl_days
             );
-            
+
             Ok(Arc::new(token_service))
         }
         TokenAlgorithm::Hmac => {
@@ -222,25 +256,27 @@ fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<Arc<dyn Token
             let signing_key = base64::engine::general_purpose::STANDARD
                 .decode(&config.crypto.token_signing_key)
                 .map_err(|e| anyhow::anyhow!("Failed to decode token signing key: {}", e))?;
-            
+
             let mut token_service = HmacTokenService::from_secret_key(&signing_key)
                 .map_err(|e| anyhow::anyhow!("Failed to initialize HMAC token service: {:?}", e))?;
-            
+
             // Decode service token signing key (separate key for service-to-service auth)
             let service_signing_key = base64::engine::general_purpose::STANDARD
                 .decode(&config.service_auth.service_token_signing_key)
-                .map_err(|e| anyhow::anyhow!("Failed to decode service token signing key: {}", e))?;
-            
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to decode service token signing key: {}", e)
+                })?;
+
             token_service = token_service
                 .with_service_token_key(&service_signing_key)
                 .map_err(|e| anyhow::anyhow!("Failed to set service token key: {:?}", e))?;
-            
+
             tracing::info!(
                 "Token service initialized (HMAC, access_ttl={}m, refresh_ttl={}d)",
                 config.crypto.access_token_ttl_mins,
                 config.crypto.refresh_token_ttl_days
             );
-            
+
             Ok(Arc::new(token_service))
         }
     }
@@ -249,8 +285,8 @@ fn initialize_token_service(config: &AuthConfig) -> anyhow::Result<Arc<dyn Token
 /// Build service registry for internal service authentication.
 fn build_service_registry(config: &AuthConfig) -> Arc<dyn ServiceRegistry + Send + Sync> {
     let mut registry = SimpleServiceRegistry::new(config.service_auth.valid_service_keys.clone());
-    
-// Add service credentials from config
+
+    // Add service credentials from config
     for (service_id, hashed_secret) in &config.service_auth.service_credentials {
         let prefix_len = 20.min(hashed_secret.len());
         tracing::debug!(
@@ -260,12 +296,12 @@ fn build_service_registry(config: &AuthConfig) -> Arc<dyn ServiceRegistry + Send
         );
         registry.add_credentials(service_id, hashed_secret);
     }
-    
+
     tracing::info!(
         "[BOOTSTRAP] Service registry initialized with {} credentials",
         config.service_auth.service_credentials.len()
     );
-    
+
     Arc::new(registry)
 }
 
@@ -282,23 +318,29 @@ fn build_app_state(
     google_code_exchanger: Arc<dyn ExchangeAuthorizationCode + Send + Sync>,
     external_identity_repo: Arc<dyn ExternalIdentityRepository + Send + Sync>,
     user_service_client: Arc<dyn UserServiceClient + Send + Sync>,
+    request_recovery: Arc<RequestCredentialRecovery>,
+    confirm_recovery: Arc<ConfirmCredentialRecovery>,
+    notification_client: Arc<NotificationHttpClient>,
 ) -> AppState {
-        AppState::new(
-            identity_repo,
-            credential_repo,
-            session_repo,
-            password_hasher,
-            token_service,
-            service_registry,
-            google_token_validator,
-            google_code_exchanger.clone(),
-            external_identity_repo,
-            user_service_client,
-            config.crypto.access_token_ttl_mins * 60, // Convert to seconds
-            config.crypto.refresh_token_ttl_days,
-            true, // rotate_refresh_tokens
-            config.service_auth.service_token_ttl_mins * 60, // Convert to seconds
-        )
+    AppState::new(
+        identity_repo,
+        credential_repo,
+        session_repo,
+        password_hasher,
+        token_service,
+        service_registry,
+        google_token_validator,
+        google_code_exchanger.clone(),
+        external_identity_repo,
+        user_service_client,
+        request_recovery,
+        confirm_recovery,
+        notification_client,
+        config.crypto.access_token_ttl_mins * 60, // Convert to seconds
+        config.crypto.refresh_token_ttl_days,
+        true,                                            // rotate_refresh_tokens
+        config.service_auth.service_token_ttl_mins * 60, // Convert to seconds
+    )
 }
 
 /// Simple in-memory service registry implementation.
@@ -315,15 +357,16 @@ impl SimpleServiceRegistry {
         for (idx, key) in valid_keys.iter().enumerate() {
             key_map.insert(key.clone(), format!("service-{}", idx));
         }
-        Self { 
+        Self {
             valid_keys: key_map,
             credentials: std::collections::HashMap::new(),
         }
     }
-    
+
     /// Add service credentials (service_id, hashed_secret)
     fn add_credentials(&mut self, service_id: &str, hashed_secret: &str) {
-        self.credentials.insert(service_id.to_string(), hashed_secret.to_string());
+        self.credentials
+            .insert(service_id.to_string(), hashed_secret.to_string());
     }
 }
 
@@ -331,20 +374,20 @@ impl ServiceRegistry for SimpleServiceRegistry {
     fn validate_api_key(&self, api_key: &str) -> Option<String> {
         self.valid_keys.get(api_key).cloned()
     }
-    
+
     fn is_service_active(&self, _service_name: &str) -> bool {
         // All services are considered active in this simple implementation
         true
     }
-    
+
     fn validate_credentials(
-        &self, 
-        service_id: &str, 
+        &self,
+        service_id: &str,
         service_secret: &str,
         password_hasher: Arc<dyn PasswordHasher + Send + Sync>,
     ) -> Option<String> {
         use crate::core::credentials::StoredCredential;
-        
+
         if let Some(stored_hash) = self.credentials.get(service_id) {
             let stored_credential = StoredCredential::from_hash(stored_hash.as_str());
             if password_hasher.verify(service_secret, &stored_credential) {
