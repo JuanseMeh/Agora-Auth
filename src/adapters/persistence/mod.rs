@@ -28,7 +28,7 @@ pub mod repositories;
 pub use database::Database;
 pub use error::PersistenceError;
 pub use id_conversion::to_uuid;
-pub use repositories::{CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql};
+pub use repositories::{CredentialRepositorySql, IdentityRepositorySql, SessionRepositorySql, RecoveryTokenRepositorySql};
 
 #[cfg(test)]
 pub mod tests;
