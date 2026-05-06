@@ -147,6 +147,7 @@ fn test_auth_config_validation_valid() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Production,
     };
     
@@ -202,6 +203,7 @@ fn test_auth_config_validation_invalid_ttl() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Production,
     };
     
@@ -260,6 +262,7 @@ fn test_auth_config_validation_short_signing_key() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Production,
     };
     
@@ -318,6 +321,7 @@ fn test_auth_config_validation_zero_max_attempts() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Production,
     };
     
@@ -376,6 +380,7 @@ fn test_auth_config_validation_production_requirements() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Production,
     };
     
@@ -434,6 +439,7 @@ fn test_auth_config_validation_development_allows_lower_security() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Development,
     };
     
@@ -489,6 +495,7 @@ fn test_auth_config_validation_empty_service_keys() {
         user_service: crate::bootstrap::config::UserServiceConfig {
             base_url: "http://localhost:8083".to_string(),
         },
+        notification_service_url: "http://localhost:8084".to_string(),
         mode: DeploymentMode::Production,
     };
     
