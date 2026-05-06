@@ -42,6 +42,8 @@ pub enum HttpError {
     IdentityNotFound(IdentityNotFoundError),
     /// Account locked (423 Locked)
     Locked(LockedError),
+    /// Too many requests (429 Too Many Requests)
+    TooManyRequests(String),
     /// Unexpected server error (500 Internal Server Error)
     Internal(InternalError),
 }
@@ -58,6 +60,7 @@ impl HttpError {
             HttpError::NotFound(_) => 404,
             HttpError::IdentityNotFound(_) => 404,
             HttpError::Locked(_) => 423,
+            HttpError::TooManyRequests(_) => 429,
             HttpError::Internal(_) => 500,
         }
     }
@@ -69,7 +72,10 @@ impl HttpError {
 
     /// Returns true if this is an unauthorized error
     pub fn is_unauthorized(&self) -> bool {
-        matches!(self, HttpError::Unauthorized(_) | HttpError::ServiceUnauthorized(_))
+        matches!(
+            self,
+            HttpError::Unauthorized(_) | HttpError::ServiceUnauthorized(_)
+        )
     }
 
     /// Returns true if this is a forbidden error
@@ -84,7 +90,10 @@ impl HttpError {
 
     /// Returns true if this is a not found error
     pub fn is_not_found(&self) -> bool {
-        matches!(self, HttpError::NotFound(_) | HttpError::IdentityNotFound(_))
+        matches!(
+            self,
+            HttpError::NotFound(_) | HttpError::IdentityNotFound(_)
+        )
     }
 
     /// Returns true if this is an internal error
@@ -95,6 +104,11 @@ impl HttpError {
     /// Returns true if this is a locked error
     pub fn is_locked(&self) -> bool {
         matches!(self, HttpError::Locked(_))
+    }
+
+    /// Returns true if this is a too many requests error
+    pub fn is_too_many_requests(&self) -> bool {
+        matches!(self, HttpError::TooManyRequests(_))
     }
 }
 
@@ -109,6 +123,7 @@ impl fmt::Display for HttpError {
             HttpError::NotFound(e) => write!(f, "Not found: {}", e),
             HttpError::IdentityNotFound(e) => write!(f, "Identity not found: {}", e),
             HttpError::Locked(e) => write!(f, "Locked: {}", e),
+            HttpError::TooManyRequests(e) => write!(f, "Too many requests: {}", e),
             HttpError::Internal(e) => write!(f, "Internal error: {}", e),
         }
     }
@@ -118,15 +133,62 @@ impl std::error::Error for HttpError {}
 
 impl axum::response::IntoResponse for HttpError {
     fn into_response(self) -> axum::response::Response {
-        use axum::http::StatusCode;
         use axum::Json;
-        
-        let status = StatusCode::from_u16(self.status_code())
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        
-        let error_response = crate::adapters::http::error::error_response::ErrorResponse::from_http_error(&self);
-        
+        use axum::http::StatusCode;
+
+        let status =
+            StatusCode::from_u16(self.status_code()).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        let error_response =
+            crate::adapters::http::error::error_response::ErrorResponse::from_http_error(&self);
+
         (status, Json(error_response)).into_response()
+    }
+}
+
+impl From<crate::core::error::CoreError> for HttpError {
+    fn from(error: crate::core::error::CoreError) -> Self {
+        use crate::core::error::*;
+
+        match error {
+            CoreError::Authentication(e) => match e {
+                AuthenticationError::UserNotFound { .. } => {
+                    HttpError::IdentityNotFound(IdentityNotFoundError::new(e.to_string()))
+                }
+                AuthenticationError::MaxAttemptsExceeded { .. } => {
+                    HttpError::TooManyRequests(e.to_string())
+                }
+                AuthenticationError::AccountLocked { .. } => {
+                    HttpError::Locked(LockedError::new(e.to_string()))
+                }
+                AuthenticationError::InvalidCredentials
+                | AuthenticationError::InvalidRecoveryToken
+                | AuthenticationError::InvalidExternalToken { .. }
+                | AuthenticationError::InvalidExternalIdentity { .. } => {
+                    HttpError::Unauthorized(UnauthorizedError::new(e.to_string()))
+                }
+                AuthenticationError::ServiceNotActive => {
+                    HttpError::Forbidden(ForbiddenError::new(e.to_string()))
+                }
+                _ => HttpError::Internal(InternalError::new(e.to_string())),
+            },
+            CoreError::Credential(e) => match e {
+                CredentialError::InvalidFormat { .. } | CredentialError::InsufficientStrength { .. } => {
+                    HttpError::Validation(ValidationError::new(e.to_string()))
+                }
+                _ => HttpError::Internal(InternalError::new(e.to_string())),
+            },
+            CoreError::Token(e) => match e {
+                TokenError::Expired { .. }
+                | TokenError::SignatureInvalid { .. }
+                | TokenError::Malformed { .. }
+                | TokenError::Revoked { .. } => {
+                    HttpError::Unauthorized(UnauthorizedError::new(e.to_string()))
+                }
+                _ => HttpError::Internal(InternalError::new(e.to_string())),
+            },
+            CoreError::Invariant(e) => HttpError::Internal(InternalError::new(e.to_string())),
+        }
     }
 }
 
@@ -309,7 +371,10 @@ impl NotFoundError {
         }
     }
 
-    pub fn with_resource_type(message: impl Into<String>, resource_type: impl Into<String>) -> Self {
+    pub fn with_resource_type(
+        message: impl Into<String>,
+        resource_type: impl Into<String>,
+    ) -> Self {
         Self {
             message: message.into(),
             resource_type: Some(resource_type.into()),
