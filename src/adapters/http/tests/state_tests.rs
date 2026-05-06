@@ -13,6 +13,11 @@ use crate::core::error::CoreError;
 use uuid::Uuid;
 use crate::core::credentials::StoredCredential;
 use crate::core::token::Token;
+use crate::core::usecases::{
+    request_credential_recovery::RequestCredentialRecovery,
+    confirm_credential_recovery::ConfirmCredentialRecovery,
+};
+use crate::adapters::clients::notification::notification_http_client::NotificationHttpClient;
 
 // ============================================================================
 // Mock Implementations
@@ -223,6 +228,23 @@ impl ExternalIdentityRepository for MockExternalIdentityRepository {
     }
 }
 
+#[derive(Clone)]
+struct MockRecoveryTokenRepo;
+impl crate::core::usecases::ports::recovery_token_repository::RecoveryTokenRepository for MockRecoveryTokenRepo {
+    fn create(&self, _token: &crate::core::credentials::recovery_token::RecoveryToken) -> BoxFuture<'static, Result<(), CoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn find_by_hash(&self, _hash: &str) -> BoxFuture<'static, Result<Option<crate::core::credentials::recovery_token::RecoveryToken>, CoreError>> {
+        Box::pin(async { Ok(None) })
+    }
+    fn mark_used(&self, _id: Uuid) -> BoxFuture<'static, Result<(), CoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn invalidate_all_for_user(&self, _user_id: Uuid) -> BoxFuture<'static, Result<(), CoreError>> {
+        Box::pin(async { Ok(()) })
+    }
+}
+
 // ============================================================================
 // Test Cases
 // ============================================================================
@@ -240,6 +262,9 @@ fn test_app_state_creation() {
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
         Arc::new(MockUserServiceClient),
+        Arc::new(RequestCredentialRecovery::new(Arc::new(MockIdentityRepo), Arc::new(MockRecoveryTokenRepo))),
+        Arc::new(ConfirmCredentialRecovery::new(Arc::new(MockCredentialRepo), Arc::new(MockRecoveryTokenRepo), Arc::new(MockPasswordHasher))),
+        Arc::new(NotificationHttpClient::new("http://localhost".to_string())),
         3600u64,
         7u64,
         true,
@@ -266,6 +291,9 @@ fn test_app_state_clone() {
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
         Arc::new(MockUserServiceClient),
+        Arc::new(RequestCredentialRecovery::new(Arc::new(MockIdentityRepo), Arc::new(MockRecoveryTokenRepo))),
+        Arc::new(ConfirmCredentialRecovery::new(Arc::new(MockCredentialRepo), Arc::new(MockRecoveryTokenRepo), Arc::new(MockPasswordHasher))),
+        Arc::new(NotificationHttpClient::new("http://localhost".to_string())),
         3600u64,
         7u64,
         true,
@@ -295,6 +323,9 @@ fn test_app_state_default_token_ttls() {
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
         Arc::new(MockUserServiceClient),
+        Arc::new(RequestCredentialRecovery::new(Arc::new(MockIdentityRepo), Arc::new(MockRecoveryTokenRepo))),
+        Arc::new(ConfirmCredentialRecovery::new(Arc::new(MockCredentialRepo), Arc::new(MockRecoveryTokenRepo), Arc::new(MockPasswordHasher))),
+        Arc::new(NotificationHttpClient::new("http://localhost".to_string())),
         900u64,
         1u64,
         false,
@@ -321,6 +352,9 @@ fn test_app_state_long_lived_tokens() {
         Arc::new(MockExchangeAuthorizationCode),
         Arc::new(MockExternalIdentityRepository),
         Arc::new(MockUserServiceClient),
+        Arc::new(RequestCredentialRecovery::new(Arc::new(MockIdentityRepo), Arc::new(MockRecoveryTokenRepo))),
+        Arc::new(ConfirmCredentialRecovery::new(Arc::new(MockCredentialRepo), Arc::new(MockRecoveryTokenRepo), Arc::new(MockPasswordHasher))),
+        Arc::new(NotificationHttpClient::new("http://localhost".to_string())),
         86400u64,
         30u64,
         true,

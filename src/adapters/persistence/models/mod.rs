@@ -14,10 +14,12 @@ All row types must implement `sqlx::FromRow` for direct deserialization.
 
 pub mod external_identity_row;
 pub mod identity_row;
+pub mod recovery_token_row;
 pub mod session_row;
 
 pub use external_identity_row::ExternalIdentityRow;
 pub use identity_row::IdentityRow;
+pub use recovery_token_row::RecoveryTokenRow;
 pub use session_row::SessionRow;
 
 #[cfg(test)]
