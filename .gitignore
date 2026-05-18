@@ -1,2 +1,5 @@
 .env
 /target
+
+auth_db.sql
+docker-compose.yml
