@@ -1,0 +1,142 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: auth_postgres
+    environment:
+      POSTGRES_USER: auth
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: auth
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./auth_db.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth -d auth"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - auth_network
+
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: auth-service
+    environment:
+      # ============================================
+      # Deployment Mode
+      # ============================================
+      AUTH_MODE: ${AUTH_MODE}
+
+      # --------------------------------------------
+      # Server Configuration
+      # --------------------------------------------
+      AUTH_SERVER_HOST: ${AUTH_SERVER_HOST}
+      AUTH_SERVER_PORT: ${AUTH_SERVER_PORT}
+
+      # --------------------------------------------
+      # Database Configuration
+      # --------------------------------------------
+      AUTH_DATABASE_URL: ${AUTH_DATABASE_URL}
+      AUTH_DB_MAX_CONNECTIONS: ${AUTH_DB_MAX_CONNECTIONS}
+      AUTH_DB_CONNECT_TIMEOUT_SECS: ${AUTH_DB_CONNECT_TIMEOUT_SECS}
+
+      # --------------------------------------------
+      # Cryptographic Configuration
+      # --------------------------------------------
+      # Password hashing parameters (Argon2id)
+      AUTH_HASH_MEMORY_COST: ${AUTH_HASH_MEMORY_COST}
+      AUTH_HASH_ITERATIONS: ${AUTH_HASH_ITERATIONS}
+      AUTH_HASH_PARALLELISM: ${AUTH_HASH_PARALLELISM}
+
+      # JWT signing algorithm (eddsa or hmac)
+      AUTH_TOKEN_ALGORITHM: ${AUTH_TOKEN_ALGORITHM}
+
+      # EdDSA (Ed25519) private key - base64 encoded
+      AUTH_EDDSA_PRIVATE_KEY: ${AUTH_EDDSA_PRIVATE_KEY}
+
+      # EdDSA (Ed25519) public key - base64 encoded
+      AUTH_EDDSA_PUBLIC_KEY: ${AUTH_EDDSA_PUBLIC_KEY}
+
+      # JWT signing key for HMAC fallback (base64-encoded, minimum 32 bytes for HS256)
+      AUTH_TOKEN_SIGNING_KEY: ${AUTH_TOKEN_SIGNING_KEY}
+
+      # Token time-to-live
+      AUTH_ACCESS_TOKEN_TTL_MINS: ${AUTH_ACCESS_TOKEN_TTL_MINS}
+      AUTH_REFRESH_TOKEN_TTL_DAYS: ${AUTH_REFRESH_TOKEN_TTL_DAYS}
+
+      # --------------------------------------------
+      # Security Configuration
+      # --------------------------------------------
+      # Account lockout settings
+      AUTH_MAX_FAILED_ATTEMPTS: ${AUTH_MAX_FAILED_ATTEMPTS}
+      AUTH_LOCK_DURATION_MINS: ${AUTH_LOCK_DURATION_MINS}
+
+      # Debug logging (disable in production - may log sensitive data)
+      AUTH_ENABLE_DEBUG_LOGS: ${AUTH_ENABLE_DEBUG_LOGS}
+
+      # --------------------------------------------
+      # Service-to-Service Authentication
+      # --------------------------------------------
+      # Comma-separated list of valid API keys for internal services
+      AUTH_SERVICE_KEYS: ${AUTH_SERVICE_KEYS}
+
+      # Service credentials (format: service_id:hashed_secret)
+      # Note: Use single quotes in YAML to prevent variable interpolation
+      AUTH_SERVICE_CREDENTIALS: ${AUTH_SERVICE_CREDENTIALS}
+
+      # Service token signing algorithm (eddsa or hmac)
+      AUTH_SERVICE_TOKEN_ALGORITHM: ${AUTH_SERVICE_TOKEN_ALGORITHM}
+
+      # EdDSA service token private key - base64 encoded
+      AUTH_EDDSA_SERVICE_PRIVATE_KEY: ${AUTH_EDDSA_SERVICE_PRIVATE_KEY}
+
+      # JWT signing key (base64-encoded, minimum 32 bytes for HS256)
+      AUTH_SERVICE_TOKEN_SIGNING_KEY: ${AUTH_SERVICE_TOKEN_SIGNING_KEY}
+
+      # EdDSA service token public key - base64 encoded
+      AUTH_EDDSA_SERVICE_PUBLIC_KEY: ${AUTH_EDDSA_SERVICE_PUBLIC_KEY}
+
+      # Service token TTL in minutes
+      AUTH_SERVICE_TOKEN_TTL_MINS: ${AUTH_SERVICE_TOKEN_TTL_MINS}
+
+
+      # Google OAuth 2.0 configuration (for social login)
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+
+      # User service configuration
+      AUTH_USER_SERVICE_BASE_URL: ${AUTH_USER_SERVICE_BASE_URL}
+
+      # Notification Service configuration
+      NOTIFICATION_SERVICE_URL: ${NOTIFICATION_SERVICE_URL}
+      # Rust logging
+      RUST_LOG: ${RUST_LOG}
+    ports:
+      - "8081:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - auth_network
+      - agora-network
+
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  auth_network:
+    driver: bridge
+  agora-network:
+    external: true
+    driver: bridge
+
