@@ -65,60 +65,46 @@ pub async fn exchange_google_code(
             )))
         })?;
 
-    // Step 4: Login branch or registration branch
-    let user_id = match existing_user_id {
-        // Login — identity already linked, continue directly to session issuance
-        Some(id) => {
-            tracing::info!(user_id = %id, "[GOOGLE_OAUTH] Step 3/4 - Existing identity found, login branch");
-            id
-        }
+    // Step 4: Always forward Google identity data to user_service
+    // (creates new user on first login, updates avatar/picture on subsequent logins)
+    let user_id = state
+        .user_service_client
+        .register_google_user(RegisterGoogleUserRequest {
+            email: identity.email.clone(),
+            name: identity.name.clone(),
+            family_name: identity.family_name.clone(),
+            picture: identity.picture.clone(),
+        })
+        .await
+        .map_err(|e| match e {
+            CoreError::Authentication(_) => HttpError::Internal(InternalError::new(
+                "User registration via user_service failed",
+            )),
+            _ => HttpError::Internal(InternalError::new(format!(
+                "Unexpected error during registration: {}",
+                e
+            ))),
+        })?;
 
-        // Registration — new user, delegate creation to user_service
-        None => {
-            tracing::info!("[GOOGLE_OAUTH] Step 3/4 - No existing identity, registration branch");
-
-            // Step 4a: Ask user_service to create the user, receive their UUID back
-            let new_user_id = state
-                .user_service_client
-                .register_google_user(RegisterGoogleUserRequest {
-                    email: identity.email.clone(),
-                    name: identity.name.clone(),
-                    family_name: identity.family_name.clone(),
-                    picture: identity.picture.clone(),
-                })
-                .await
-                .map_err(|e| match e {
-                    CoreError::Authentication(_) => HttpError::Internal(InternalError::new(
-                        "User registration via user_service failed",
-                    )),
-                    _ => HttpError::Internal(InternalError::new(format!(
-                        "Unexpected error during registration: {}",
-                        e
-                    ))),
-                })?;
-            tracing::info!(user_id = %new_user_id, "[GOOGLE_OAUTH] Step 4a - User registered via user_service");
-
-            // Step 4b: Upsert external identity link in auth's own DB
-            state
-                .external_identity_repo
-                .upsert(
-                    &identity.provider,
-                    &identity.provider_user_id,
-                    new_user_id,
-                    identity.email.as_deref(),
-                )
-                .await
-                .map_err(|e| {
-                    HttpError::Internal(InternalError::new(format!(
-                        "Failed to link external identity: {}",
-                        e
-                    )))
-                })?;
-            tracing::info!("[GOOGLE_OAUTH] Step 4b - External identity linked in auth DB");
-
-            new_user_id
-        }
-    };
+    // Step 4b: Only upsert external identity link for first-time users
+    if existing_user_id.is_none() {
+        state
+            .external_identity_repo
+            .upsert(
+                &identity.provider,
+                &identity.provider_user_id,
+                user_id,
+                identity.email.as_deref(),
+            )
+            .await
+            .map_err(|e| {
+                HttpError::Internal(InternalError::new(format!(
+                    "Failed to link external identity: {}",
+                    e
+                )))
+            })?;
+        tracing::info!("[GOOGLE_OAUTH] Step 4b - External identity linked in auth DB");
+    }
 
     // Step 5: Issue session — no identity_credential lookup needed for external users
     let issue_usecase = IssueSessionForExternalIdentity::new(
