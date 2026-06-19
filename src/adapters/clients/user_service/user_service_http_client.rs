@@ -41,6 +41,7 @@ struct RegisterGoogleUserBody {
 /// Response body received from user_service
 #[derive(Debug, Deserialize)]
 struct RegisterGoogleUserResponse {
+    #[serde(alias = "id")]
     user_id: Uuid,
 }
 
