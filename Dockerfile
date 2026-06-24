@@ -2,7 +2,7 @@
 # Stage 1: Build
 # ============================================
 # Using rust:1.88 for Rust 2024 edition and dependency support
-FROM rust:1.88-alpine AS builder
+FROM --platform=$TARGETPLATFORM rust:1.88-alpine AS builder
 
 # Install build dependencies (Alpine uses apk)
 RUN apk add --no-cache \
@@ -25,7 +25,7 @@ RUN cargo build --release --bin auth
 # ============================================
 # Stage 2: Production
 # ============================================
-FROM alpine:latest AS production
+FROM --platform=$TARGETPLATFORM alpine:latest AS production
 
 # Install runtime dependencies
 RUN apk add --no-cache \
