@@ -11,15 +11,21 @@ RUN apk add --no-cache \
     musl-dev \
     gcc
 
-# Create app directory
 WORKDIR /app
 
-# Copy dependency files first for better caching
+# Copy only Cargo manifests first — this layer is cached unless Cargo.toml/lock changes
 COPY Cargo.toml Cargo.lock ./
+
+# Create a dummy main.rs, build to cache *all* dependency compilation,
+# then nuke the dummy source so the real build below uses the cache
+RUN mkdir src && echo "fn main() {}" > src/main.rs && \
+    cargo build --release --bin auth 2>/dev/null && \
+    rm -rf src
+
+# Now copy real source — only the app code recompiles,
+# dependencies reuse the cached layer above
 COPY src ./src
 
-# Build the application
-# Using release profile for optimized binary
 RUN cargo build --release --bin auth
 
 # ============================================
